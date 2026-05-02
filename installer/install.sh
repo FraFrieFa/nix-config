@@ -12,7 +12,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 print_header() {
-  clear
+  echo ""
   echo -e "${CYAN}${BOLD}"
   echo "╔════════════════════════════════════════╗"
   echo "║       NixOS Flake Installer            ║"
@@ -25,17 +25,165 @@ print_header
 CONFIG_SOURCE="$EMBEDDED_CONFIG"
 TEMP_CLONE=""
 
-if ping -c1 -W2 github.com &>/dev/null 2>&1; then
-  echo -e "${GREEN}Network available${NC}"
-  read -p "Pull latest config from GitHub? [y/N]: " UPDATE_CHOICE
-  if [[ "${UPDATE_CHOICE,,}" == "y" ]]; then
+have_github_access() {
+  git ls-remote --exit-code "$REPO_URL" HEAD &>/dev/null
+}
+
+wait_for_github_access() {
+  echo -e "${CYAN}Waiting briefly for network...${NC}"
+  for _ in {1..8}; do
+    if have_github_access; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  while true; do
+    echo ""
+    echo -e "${CYAN}GitHub is not reachable yet.${NC}"
+    echo "Press Enter to retry, type 'nmtui' to configure networking, or type 'skip' to use the embedded config."
+    read -r NETWORK_ACTION
+
+    case "${NETWORK_ACTION,,}" in
+      skip)
+        return 1
+        ;;
+      nmtui)
+        if command -v nmtui &>/dev/null; then
+          nmtui
+        else
+          echo -e "${RED}nmtui is not available in this environment${NC}"
+        fi
+        ;;
+    esac
+
+    if have_github_access; then
+      return 0
+    fi
+  done
+}
+
+prompt_for_existing_partition() {
+  local prompt="$1"
+  local selected
+
+  while true; do
+    read -p "$prompt" selected
+    if [[ -b "$selected" ]] && [[ "$(lsblk -dnro TYPE "$selected" 2>/dev/null)" == "part" ]]; then
+      printf '%s\n' "$selected"
+      return 0
+    fi
+    echo -e "${RED}Partition not found${NC}"
+  done
+}
+
+partition_disk() {
+  local disk="$1"
+
+  echo ""
+  echo -e "${RED}${BOLD}WARNING: This will ERASE ${disk}${NC}"
+  echo ""
+  read -p "Type 'yes' to confirm: " CONFIRM
+  if [[ "$CONFIRM" != "yes" ]]; then
+    echo "Aborted"
+    exit 1
+  fi
+
+  print_header
+  echo -e "${CYAN}Partitioning ${disk}...${NC}"
+
+  wipefs -af "$disk"
+  parted -s "$disk" -- mklabel gpt
+  parted -s "$disk" -- mkpart boot fat32 1MiB 2GiB
+  parted -s "$disk" -- set 1 esp on
+  parted -s "$disk" -- mkpart cryptroot 2GiB 100%
+
+  if [[ "$disk" == *"nvme"* ]] || [[ "$disk" == *"mmcblk"* ]]; then
+    BOOT_PART="${disk}p1"
+    ROOT_PART="${disk}p2"
+  else
+    BOOT_PART="${disk}1"
+    ROOT_PART="${disk}2"
+  fi
+
+  sleep 1
+  partprobe "$disk"
+  sleep 1
+}
+
+select_install_partitions() {
+  local disk
+  local mode
+
+  print_header
+  echo -e "${BOLD}Available disks:${NC}\n"
+  lsblk -d -o NAME,SIZE,MODEL | grep -v -E "^loop|^sr|^ram"
+  echo ""
+  echo "  1) Erase a disk and partition automatically"
+  echo "  2) Use existing boot and root partitions"
+  echo ""
+
+  while true; do
+    read -p "Choose mode [1-2]: " mode
+    case "$mode" in
+      1)
+        while true; do
+          read -p "Enter disk (e.g., nvme0n1, sda): " DISK_NAME
+          disk="/dev/$DISK_NAME"
+          if [[ -b "$disk" ]]; then
+            partition_disk "$disk"
+            return 0
+          fi
+          echo -e "${RED}Disk not found${NC}"
+        done
+        ;;
+      2)
+        print_header
+        echo -e "${BOLD}Available partitions:${NC}\n"
+        lsblk -p -o PATH,SIZE,FSTYPE,PARTLABEL,MOUNTPOINTS | grep -v -E "^loop|^sr|^ram"
+        echo ""
+        BOOT_PART=$(prompt_for_existing_partition "Enter EFI/boot partition path (e.g., /dev/nvme0n1p1): ")
+        while true; do
+          ROOT_PART=$(prompt_for_existing_partition "Enter root partition path (e.g., /dev/nvme0n1p2): ")
+          if [[ "$ROOT_PART" != "$BOOT_PART" ]]; then
+            break
+          fi
+          echo -e "${RED}Boot and root partitions must be different${NC}"
+        done
+
+        echo ""
+        echo -e "${RED}${BOLD}WARNING: This will FORMAT ${BOOT_PART} and ERASE ${ROOT_PART}${NC}"
+        echo ""
+        read -p "Type 'yes' to confirm: " CONFIRM
+        if [[ "$CONFIRM" != "yes" ]]; then
+          echo "Aborted"
+          exit 1
+        fi
+        return 0
+        ;;
+    esac
+    echo -e "${RED}Invalid selection${NC}"
+  done
+}
+
+read -p "Pull latest config from GitHub? [y/N]: " UPDATE_CHOICE
+if [[ "${UPDATE_CHOICE,,}" == "y" ]]; then
+  if wait_for_github_access; then
     TEMP_CLONE=$(mktemp -d)
     echo -e "${CYAN}Cloning latest config...${NC}"
-    git clone --depth 1 "$REPO_URL" "$TEMP_CLONE" 2>/dev/null
-    CONFIG_SOURCE="$TEMP_CLONE"
+    if git clone --depth 1 "$REPO_URL" "$TEMP_CLONE"; then
+      CONFIG_SOURCE="$TEMP_CLONE"
+      echo -e "${GREEN}Using freshly cloned config${NC}"
+    else
+      rm -rf "$TEMP_CLONE"
+      TEMP_CLONE=""
+      echo -e "${RED}Clone failed — falling back to embedded config${NC}"
+    fi
+  else
+    echo -e "${CYAN}Using embedded config${NC}"
   fi
 else
-  echo -e "${CYAN}No network — using embedded config${NC}"
+  echo -e "${CYAN}Using embedded config${NC}"
 fi
 
 mapfile -t HOSTS < <(nix flake show --json --no-update-lock-file "$CONFIG_SOURCE" 2>/dev/null \
@@ -66,51 +214,10 @@ echo -e "\n${GREEN}Selected: ${BOLD}$HOST${NC}\n"
 
 print_header
 echo -e "${BOLD}Host:${NC} $HOST\n"
-echo -e "${BOLD}Available disks:${NC}\n"
-lsblk -d -o NAME,SIZE,MODEL | grep -v -E "^loop|^sr|^ram"
-echo ""
-
-while true; do
-  read -p "Enter disk (e.g., nvme0n1, sda): " DISK_NAME
-  DISK="/dev/$DISK_NAME"
-  if [[ -b "$DISK" ]]; then
-    break
-  fi
-  echo -e "${RED}Disk not found${NC}"
-done
-
-echo ""
-echo -e "${RED}${BOLD}WARNING: This will ERASE ${DISK}${NC}"
-echo ""
-read -p "Type 'yes' to confirm: " CONFIRM
-if [[ "$CONFIRM" != "yes" ]]; then
-  echo "Aborted"
-  exit 1
-fi
-
-print_header
-echo -e "${CYAN}Partitioning ${DISK}...${NC}"
-
-wipefs -af "$DISK"
-parted -s "$DISK" -- mklabel gpt
-parted -s "$DISK" -- mkpart boot fat32 1MiB 2GiB
-parted -s "$DISK" -- set 1 esp on
-parted -s "$DISK" -- mkpart cryptroot 2GiB 100%
-
-if [[ "$DISK" == *"nvme"* ]] || [[ "$DISK" == *"mmcblk"* ]]; then
-  PART1="${DISK}p1"
-  PART2="${DISK}p2"
-else
-  PART1="${DISK}1"
-  PART2="${DISK}2"
-fi
-
-sleep 1
-partprobe "$DISK"
-sleep 1
+select_install_partitions
 
 echo -e "${CYAN}Formatting EFI partition (label: BOOT)...${NC}"
-mkfs.fat -F 32 -n BOOT "$PART1"
+mkfs.fat -F 32 -n BOOT "$BOOT_PART"
 
 echo -e "\n${CYAN}Setting up LUKS2 encryption...${NC}"
 echo -e "${BOLD}Enter disk encryption passphrase:${NC}"
@@ -124,10 +231,10 @@ cryptsetup luksFormat --type luks2 \
   --pbkdf-parallel 4 \
   --iter-time 3000 \
   --batch-mode \
-  "$PART2"
+  "$ROOT_PART"
 
 echo -e "\n${CYAN}Opening encrypted partition...${NC}"
-cryptsetup open "$PART2" cryptroot
+cryptsetup open "$ROOT_PART" cryptroot
 
 echo -e "${CYAN}Formatting root filesystem (label: nixos)...${NC}"
 mkfs.ext4 -L nixos /dev/mapper/cryptroot
@@ -135,11 +242,10 @@ mkfs.ext4 -L nixos /dev/mapper/cryptroot
 echo -e "${CYAN}Mounting filesystems...${NC}"
 mount /dev/mapper/cryptroot /mnt
 mkdir -p /mnt/boot
-mount "$PART1" /mnt/boot
+mount "$BOOT_PART" /mnt/boot
 
-echo -e "${CYAN}Placing configuration at /root/nix-config...${NC}"
-mkdir -p /mnt/root
-chmod 700 /mnt/root
+echo -e "${CYAN}Placing configuration at /etc/nixos...${NC}"
+mkdir -p /mnt/etc
 
 if [[ -n "$TEMP_CLONE" ]]; then
   cp -r "$TEMP_CLONE/." "$INSTALL_CONFIG"
@@ -152,8 +258,15 @@ echo -e "\n${CYAN}${BOLD}Installing NixOS...${NC}\n"
 
 nixos-install --flake "$INSTALL_CONFIG#$HOST"
 
-mkdir -p /mnt/etc
-ln -sf /root/nix-config /mnt/etc/nixos
+TARGET_OWNER=$(nixos-enter --root /mnt -c 'getent passwd | awk -F: "$3 >= 1000 && $3 < 65534 {print \$1; exit}"' 2>/dev/null || true)
+if [[ -n "$TARGET_OWNER" ]]; then
+  echo -e "\n${CYAN}Adjusting /etc/nixos ownership for ${TARGET_OWNER}:nixos-config...${NC}\n"
+  nixos-enter --root /mnt -c "chown -R ${TARGET_OWNER}:nixos-config /etc/nixos \
+    && chmod -R u+rwX,g+rwX /etc/nixos \
+    && find /etc/nixos -type d -exec chmod g+s {} +"
+else
+  echo -e "\n${RED}Could not determine a normal user for /etc/nixos ownership; leaving root ownership in place${NC}\n"
+fi
 
 print_header
 echo -e "${CYAN}${BOLD}Set user passwords:${NC}\n"
@@ -167,7 +280,7 @@ done
 print_header
 echo -e "${GREEN}${BOLD}Installation complete!${NC}"
 echo ""
-echo -e "  /etc/nixos → /root/nix-config (nixos-rebuild switch works as usual)"
+echo -e "  Config is installed directly in ${BOLD}/etc/nixos${NC}"
 if [[ -z "$TEMP_CLONE" ]]; then
   echo -e "  Config was installed from the embedded ISO snapshot."
   echo -e "  To track changes: ${BOLD}cd /etc/nixos && git init && git remote add origin $REPO_URL${NC}"
