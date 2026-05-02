@@ -22,8 +22,8 @@ print_header() {
 
 print_header
 
-CONFIG_SOURCE="$EMBEDDED_CONFIG"
-TEMP_CLONE=""
+CONFIG_SOURCE="${CONFIG_SOURCE_OVERRIDE:-$EMBEDDED_CONFIG}"
+TEMP_CLONE="${TEMP_CLONE_OVERRIDE:-}"
 
 have_github_access() {
   git ls-remote --exit-code "$REPO_URL" HEAD &>/dev/null
@@ -63,20 +63,6 @@ wait_for_github_access() {
   done
 }
 
-prompt_for_existing_partition() {
-  local prompt="$1"
-  local selected
-
-  while true; do
-    read -p "$prompt" selected
-    if [[ -b "$selected" ]] && [[ "$(lsblk -dnro TYPE "$selected" 2>/dev/null)" == "part" ]]; then
-      printf '%s\n' "$selected"
-      return 0
-    fi
-    echo -e "${RED}Partition not found${NC}"
-  done
-}
-
 partition_disk() {
   local disk="$1"
 
@@ -111,79 +97,57 @@ partition_disk() {
   sleep 1
 }
 
-select_install_partitions() {
+select_install_disk() {
   local disk
-  local mode
 
   print_header
   echo -e "${BOLD}Available disks:${NC}\n"
   lsblk -d -o NAME,SIZE,MODEL | grep -v -E "^loop|^sr|^ram"
   echo ""
-  echo "  1) Erase a disk and partition automatically"
-  echo "  2) Use existing boot and root partitions"
-  echo ""
 
   while true; do
-    read -p "Choose mode [1-2]: " mode
-    case "$mode" in
-      1)
-        while true; do
-          read -p "Enter disk (e.g., nvme0n1, sda): " DISK_NAME
-          disk="/dev/$DISK_NAME"
-          if [[ -b "$disk" ]]; then
-            partition_disk "$disk"
-            return 0
-          fi
-          echo -e "${RED}Disk not found${NC}"
-        done
-        ;;
-      2)
-        print_header
-        echo -e "${BOLD}Available partitions:${NC}\n"
-        lsblk -p -o PATH,SIZE,FSTYPE,PARTLABEL,MOUNTPOINTS | grep -v -E "^loop|^sr|^ram"
-        echo ""
-        BOOT_PART=$(prompt_for_existing_partition "Enter EFI/boot partition path (e.g., /dev/nvme0n1p1): ")
-        while true; do
-          ROOT_PART=$(prompt_for_existing_partition "Enter root partition path (e.g., /dev/nvme0n1p2): ")
-          if [[ "$ROOT_PART" != "$BOOT_PART" ]]; then
-            break
-          fi
-          echo -e "${RED}Boot and root partitions must be different${NC}"
-        done
-
-        echo ""
-        echo -e "${RED}${BOLD}WARNING: This will FORMAT ${BOOT_PART} and ERASE ${ROOT_PART}${NC}"
-        echo ""
-        read -p "Type 'yes' to confirm: " CONFIRM
-        if [[ "$CONFIRM" != "yes" ]]; then
-          echo "Aborted"
-          exit 1
-        fi
-        return 0
-        ;;
-    esac
-    echo -e "${RED}Invalid selection${NC}"
+    read -p "Enter disk to erase completely (e.g., nvme0n1, sda): " DISK_NAME
+    disk="/dev/$DISK_NAME"
+    if [[ -b "$disk" ]]; then
+      partition_disk "$disk"
+      return 0
+    fi
+    echo -e "${RED}Disk not found${NC}"
   done
 }
 
-read -p "Pull latest config from GitHub? [y/N]: " UPDATE_CHOICE
-if [[ "${UPDATE_CHOICE,,}" == "y" ]]; then
-  if wait_for_github_access; then
-    TEMP_CLONE=$(mktemp -d)
-    echo -e "${CYAN}Cloning latest config...${NC}"
-    if git clone --depth 1 "$REPO_URL" "$TEMP_CLONE"; then
-      CONFIG_SOURCE="$TEMP_CLONE"
-      echo -e "${GREEN}Using freshly cloned config${NC}"
+if [[ -n "${CONFIG_SOURCE_OVERRIDE:-}" ]]; then
+  echo -e "${GREEN}Continuing with freshly pulled config${NC}"
+else
+  read -p "Pull latest config from GitHub? [y/N]: " UPDATE_CHOICE
+  if [[ "${UPDATE_CHOICE,,}" == "y" ]]; then
+    if wait_for_github_access; then
+      TEMP_CLONE=$(mktemp -d)
+      echo -e "${CYAN}Cloning latest config...${NC}"
+      if git clone --depth 1 "$REPO_URL" "$TEMP_CLONE"; then
+        CONFIG_SOURCE="$TEMP_CLONE"
+        echo -e "${GREEN}Using freshly cloned config${NC}"
+
+        if [[ -x "$TEMP_CLONE/installer/install.sh" ]] && [[ "${INSTALLER_REEXECED:-0}" != "1" ]]; then
+          echo -e "${CYAN}Restarting installer from the freshly pulled repo...${NC}"
+          exec env \
+            INSTALLER_REEXECED=1 \
+            CONFIG_SOURCE_OVERRIDE="$TEMP_CLONE" \
+            TEMP_CLONE_OVERRIDE="$TEMP_CLONE" \
+            "$TEMP_CLONE/installer/install.sh"
+        fi
+      else
+        rm -rf "$TEMP_CLONE"
+        TEMP_CLONE=""
+        CONFIG_SOURCE="$EMBEDDED_CONFIG"
+        echo -e "${RED}Clone failed — falling back to embedded config${NC}"
+      fi
     else
-      rm -rf "$TEMP_CLONE"
-      TEMP_CLONE=""
-      echo -e "${RED}Clone failed — falling back to embedded config${NC}"
+      echo -e "${CYAN}Using embedded config${NC}"
     fi
   else
     echo -e "${CYAN}Using embedded config${NC}"
   fi
-else
-  echo -e "${CYAN}Using embedded config${NC}"
 fi
 
 mapfile -t HOSTS < <(nix flake show --json --no-update-lock-file "$CONFIG_SOURCE" 2>/dev/null \
@@ -214,7 +178,7 @@ echo -e "\n${GREEN}Selected: ${BOLD}$HOST${NC}\n"
 
 print_header
 echo -e "${BOLD}Host:${NC} $HOST\n"
-select_install_partitions
+select_install_disk
 
 echo -e "${CYAN}Formatting EFI partition (label: BOOT)...${NC}"
 mkfs.fat -F 32 -n BOOT "$BOOT_PART"
