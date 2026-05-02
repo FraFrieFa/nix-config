@@ -2,34 +2,32 @@
   description = "nix-config";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
   };
 
   outputs = { self, nixpkgs, ... }:
   let
     system = "x86_64-linux";
-    pkgs = nixpkgs.legacyPackages.${system};
   in {
     nixosConfigurations.PC = nixpkgs.lib.nixosSystem {
       inherit system;
       modules = [
-        ./base.nix
+        ./profiles/base.nix
         ./hosts/PC/default.nix
-        ./hosts/PC/hardware.nix
       ];
     };
 
     nixosConfigurations.hp-mini = nixpkgs.lib.nixosSystem {
       inherit system;
       modules = [
-        ./base.nix
+        ./profiles/base.nix
         ./hosts/hp-mini/default.nix
-        ./hosts/hp-mini/hardware.nix
       ];
     };
 
     nixosConfigurations.installer = nixpkgs.lib.nixosSystem {
       inherit system;
+      specialArgs = { flakeSelf = self; };
       modules = [ ./installer ];
     };
 

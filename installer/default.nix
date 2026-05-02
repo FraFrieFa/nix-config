@@ -1,17 +1,14 @@
-{ config, pkgs, lib, modulesPath, ... }:
+{ config, pkgs, lib, modulesPath, flakeSelf, ... }:
 {
   imports = [
     "${modulesPath}/installer/cd-dvd/installation-cd-minimal.nix"
+    ../profiles/base.nix
   ];
 
-  boot.kernelPackages = pkgs.linuxPackages_latest;
   boot.supportedFilesystems = lib.mkForce [ "vfat" "ext4" ];
-
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
   environment.systemPackages = with pkgs; [
     git
-    nano
     parted
     cryptsetup
     dosfstools
@@ -19,17 +16,9 @@
     jq
   ];
 
-  programs.nano.nanorc = ''
-    set autoindent
-    set tabsize 2
-    set tabstospaces
-    set linenumbers
-    set nohelp
-    set nowrap
-    set softwrap
-  '';
+  environment.etc."nix-config".source = flakeSelf;
 
-  documentation.enable = false;
+  documentation.enable       = false;
   documentation.nixos.enable = false;
 
   environment.etc."install.sh" = {
@@ -46,7 +35,5 @@
     fi
   '';
 
-  console.keyMap = "de";
-
-  system.stateVersion = "25.05";
+  system.stateVersion = "26.05";
 }
