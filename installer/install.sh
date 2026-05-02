@@ -98,7 +98,7 @@ partition_disk() {
 }
 
 list_target_users() {
-  awk -F: '$3 >= 1000 && $3 < 65534 { print $1 }' /mnt/etc/passwd 2>/dev/null || true
+  awk -F: '$3 >= 1000 && $3 < 65534 && $7 !~ /(nologin|noshell)/ { print $1 }' /mnt/etc/passwd 2>/dev/null || true
 }
 
 select_install_disk() {

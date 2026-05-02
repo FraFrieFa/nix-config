@@ -3,6 +3,7 @@
   imports = [
     ../../profiles/disk.nix
     ../../profiles/desktop.nix
+    ../../profiles/programming.nix
   ];
 
   networking.hostName = "hp-mini";
