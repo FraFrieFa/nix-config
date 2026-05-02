@@ -33,6 +33,8 @@
     shell        = pkgs.bash;
   };
 
+  users.users.root.hashedPassword = "!";
+
   security.sudo.wheelNeedsPassword = true;
   security.sudo.execWheelOnly      = true;
 

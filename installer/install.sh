@@ -97,6 +97,10 @@ partition_disk() {
   sleep 1
 }
 
+list_target_users() {
+  awk -F: '$3 >= 1000 && $3 < 65534 { print $1 }' /mnt/etc/passwd 2>/dev/null || true
+}
+
 select_install_disk() {
   local disk
 
@@ -206,7 +210,7 @@ mkfs.ext4 -L nixos /dev/mapper/cryptroot
 echo -e "${CYAN}Mounting filesystems...${NC}"
 mount /dev/mapper/cryptroot /mnt
 mkdir -p /mnt/boot
-mount "$BOOT_PART" /mnt/boot
+mount -o umask=077 "$BOOT_PART" /mnt/boot
 
 echo -e "${CYAN}Placing configuration at /etc/nixos...${NC}"
 mkdir -p /mnt/etc
@@ -220,9 +224,9 @@ fi
 
 echo -e "\n${CYAN}${BOLD}Installing NixOS...${NC}\n"
 
-nixos-install --flake "$INSTALL_CONFIG#$HOST"
+nixos-install --no-root-passwd --flake "$INSTALL_CONFIG#$HOST"
 
-TARGET_OWNER=$(nixos-enter --root /mnt -c 'getent passwd | awk -F: "$3 >= 1000 && $3 < 65534 {print \$1; exit}"' 2>/dev/null || true)
+TARGET_OWNER=$(list_target_users | head -n1)
 if [[ -n "$TARGET_OWNER" ]]; then
   echo -e "\n${CYAN}Adjusting /etc/nixos ownership for ${TARGET_OWNER}:nixos-config...${NC}\n"
   nixos-enter --root /mnt -c "chown -R ${TARGET_OWNER}:nixos-config /etc/nixos \
@@ -235,7 +239,7 @@ fi
 print_header
 echo -e "${CYAN}${BOLD}Set user passwords:${NC}\n"
 
-for USER in $(nixos-enter --root /mnt -c 'getent passwd | awk -F: "$3 >= 1000 && $3 < 65534 {print $1}"' 2>/dev/null); do
+for USER in $(list_target_users); do
   echo -e "Password for ${BOLD}$USER${NC}:"
   nixos-enter --root /mnt -c "passwd $USER"
   echo ""
