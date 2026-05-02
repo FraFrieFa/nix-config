@@ -160,12 +160,6 @@ cat > "$CONFIG_PATH/hosts/$HOST/hardware.nix" << EOF
   hardware.graphics = {
     enable      = true;
     enable32Bit = true;
-    extraPackages = with pkgs; [
-      intel-media-driver
-      vaapiIntel
-      vaapiVdpau
-      libvdpau-va-gl
-    ];
   };
 
   boot.initrd.luks.devices."cryptroot" = {
