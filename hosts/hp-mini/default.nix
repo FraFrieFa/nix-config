@@ -8,6 +8,13 @@
 
   networking.hostName = "hp-mini";
 
+  users.users.fabius.packages = with pkgs; [
+    screen
+    rpiboot
+    picocom
+    v4l-utils
+  ];
+
   services.openssh = {
     enable = true;
     openFirewall = true;

@@ -42,10 +42,6 @@ in
     '';
   };
 
-  environment.systemPackages = [
-    nomSandbox
-  ];
-
   networking.networkmanager.enable = true;
 
   users.groups.nixos-config = {};
@@ -54,6 +50,11 @@ in
     isNormalUser = true;
     extraGroups  = [ "wheel" "networkmanager" "video" "audio" "nixos-config" ];
     shell        = pkgs.bash;
+    packages = with pkgs; [
+      nomSandbox
+      usbutils
+      pciutils
+    ];
   };
 
   users.users.root.hashedPassword = "!";
