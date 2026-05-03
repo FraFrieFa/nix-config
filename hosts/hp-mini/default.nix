@@ -8,5 +8,15 @@
 
   networking.hostName = "hp-mini";
 
+  services.openssh = {
+    enable = true;
+    openFirewall = true;
+    settings = {
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+      PermitRootLogin = "no";
+    };
+  };
+
   system.stateVersion = "26.05";
 }
