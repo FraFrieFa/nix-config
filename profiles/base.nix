@@ -1,4 +1,23 @@
 { config, pkgs, lib, modulesPath, ... }:
+let
+  nomSandbox = pkgs.writeShellApplication {
+    name = "nom";
+    runtimeInputs = [ pkgs.bubblewrap ];
+    text = ''
+      exec bwrap \
+        --clearenv \
+        --setenv HOME /tmp \
+        --setenv XDG_CACHE_HOME /tmp \
+        --setenv TERM "''${TERM:-xterm-256color}" \
+        --unshare-all \
+        --die-with-parent \
+        --new-session \
+        --ro-bind /nix/store /nix/store \
+        --dir /tmp \
+        ${lib.getExe pkgs.nix-output-monitor} "$@"
+    '';
+  };
+in
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
@@ -22,6 +41,10 @@
       include "${pkgs.nano}/share/nano/*.nanorc"
     '';
   };
+
+  environment.systemPackages = [
+    nomSandbox
+  ];
 
   networking.networkmanager.enable = true;
 
