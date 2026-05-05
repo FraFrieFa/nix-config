@@ -4,11 +4,13 @@
   boot.loader.efi.canTouchEfiVariables = true;
 
   boot.initrd.systemd.enable = true;
+  boot.initrd.systemd.fido2.enable = true;
 
   boot.initrd.luks.devices."cryptroot" = {
     device           = "/dev/disk/by-partlabel/cryptroot";
     allowDiscards    = true;
     bypassWorkqueues = true;
+    crypttabExtraOpts = [ "fido2-device=auto" ];
   };
 
   fileSystems."/" = {

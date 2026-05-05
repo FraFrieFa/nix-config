@@ -4,9 +4,10 @@
     ../../profiles/disk.nix
     ../../profiles/desktop.nix
     ../../profiles/programming.nix
+    ../../profiles/unfree.nix
   ];
 
-  networking.hostName = "hp-mini";
+  networking.hostName = "workstation";
 
   users.users.fabius.packages = with pkgs; [
     screen

@@ -3,12 +3,24 @@
   services.xserver = {
     enable     = true;
     xkb.layout = "de";
-    desktopManager.xfce.enable = true;
   };
 
-  services.xserver.displayManager.lightdm.enable = true;
+  services.desktopManager.plasma6.enable = true;
 
-  programs.firefox.enable = true;
+  services.displayManager.sddm = {
+    enable          = true;
+    wayland.enable  = true;
+  };
+
+  programs.firefox = {
+    enable = true;
+    policies.ExtensionSettings = {
+      "uBlock0@raymondhill.net" = {
+        install_url = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
+        installation_mode = "normal_installed";
+      };
+    };
+  };
 
   environment.systemPackages = with pkgs; [
     htop

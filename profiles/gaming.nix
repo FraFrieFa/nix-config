@@ -19,5 +19,42 @@
 
   programs.gamemode.enable = true;
 
+  programs.steam = {
+    enable = true;
+    gamescopeSession.enable = true;
+    extraCompatPackages = with pkgs; [
+      proton-ge-bin
+    ];
+  };
+
+  environment.systemPackages = with pkgs; [
+    gamescope
+    goverlay
+    libva-utils
+    mangohud
+    mesa-demos
+    nvtopPackages.nvidia
+    protontricks
+    protonup-qt
+    vulkan-tools
+  ];
+
+  nixpkgs.config.allowUnfreePredicate = pkg:
+    let
+      name = pkgs.lib.getName pkg;
+      licenses = pkgs.lib.toList (pkg.meta.license or []);
+      hasCudaEula = pkgs.lib.any (license: (license.shortName or "") == "CUDA EULA") licenses;
+    in
+      hasCudaEula || pkgs.lib.any (prefix: pkgs.lib.hasPrefix prefix name) [
+        "libnvidia"
+        "nvidia"
+      ] || builtins.elem name [
+        "proton-ge-bin"
+        "steam"
+        "steam-original"
+        "steam-unwrapped"
+        "steam-run"
+      ];
+
   users.users.fabius.extraGroups = lib.mkAfter [ "gamemode" ];
 }

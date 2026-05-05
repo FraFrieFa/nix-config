@@ -11,23 +11,29 @@
     system = "x86_64-linux";
     configRepo = "https://github.com/FraFrieFa/nix-config"; # set to "" to disable GitHub pull
     pkgs = import nixpkgs { inherit system; };
-    pkgs-unstable = import nixpkgs-unstable { inherit system; };
+    pkgs-unstable = import nixpkgs-unstable {
+      inherit system;
+      config.allowUnfreePredicate = pkg: builtins.elem (pkgs.lib.getName pkg) [
+        "claude-code"
+        "teamspeak6-client"
+      ];
+    };
   in {
-    nixosConfigurations.PC = nixpkgs.lib.nixosSystem {
+    nixosConfigurations.desktop = nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = { inherit pkgs-unstable; };
       modules = [
         ./profiles/base.nix
-        ./hosts/PC/default.nix
+        ./hosts/desktop/default.nix
       ];
     };
 
-    nixosConfigurations.hp-mini = nixpkgs.lib.nixosSystem {
+    nixosConfigurations.workstation = nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = { inherit pkgs-unstable; };
       modules = [
         ./profiles/base.nix
-        ./hosts/hp-mini/default.nix
+        ./hosts/workstation/default.nix
       ];
     };
 
