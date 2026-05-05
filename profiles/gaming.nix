@@ -17,7 +17,6 @@
 
   services.xserver.windowManager.openbox.enable = true;
 
-  programs.steam.enable    = true;
   programs.gamemode.enable = true;
 
   users.users.fabius.extraGroups = lib.mkAfter [ "gamemode" ];

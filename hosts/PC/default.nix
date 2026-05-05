@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ pkgs, lib, ... }:
 {
   imports = [
     ../../profiles/disk.nix
@@ -8,17 +8,7 @@
 
   networking.hostName = "PC";
 
-  services.xserver.videoDrivers = [ "nvidia" ];
-  hardware.nvidia = {
-    modesetting.enable = true;
-    open               = false;
-    package            = config.boot.kernelPackages.nvidiaPackages.stable;
-  };
-
-  hardware.graphics = {
-    enable      = true;
-    enable32Bit = true;
-  };
+  hardware.graphics.enable = true;
 
   system.stateVersion = "26.05";
 }

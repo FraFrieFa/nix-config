@@ -9,6 +9,5 @@
     gcc
   ] ++ [
     pkgs-unstable.codex
-    pkgs-unstable.claude-code
   ];
 }

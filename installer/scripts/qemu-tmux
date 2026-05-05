@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+session="${INSTALLER_VM_TMUX_SESSION:-nixos-installer}"
+width="${INSTALLER_VM_TMUX_WIDTH:-120}"
+height="${INSTALLER_VM_TMUX_HEIGHT:-40}"
+
+if tmux has-session -t "$session" 2>/dev/null; then
+  echo "tmux session already exists: $session" >&2
+  echo "Attach with: tmux attach -t $session" >&2
+  echo "Capture with: installer/scripts/qemu-screen" >&2
+  exit 1
+fi
+
+tmux new-session \
+  -d \
+  -s "$session" \
+  -x "$width" \
+  -y "$height" \
+  -c "$repo_root" \
+  "$repo_root/installer/scripts/qemu-run"
+
+echo "Started VM in tmux session: $session"
+echo "Attach:  tmux attach -t $session"
+echo "Screen:  installer/scripts/qemu-screen"
