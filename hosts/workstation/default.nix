@@ -4,6 +4,7 @@
     ../../profiles/disk.nix
     ../../profiles/desktop.nix
     ../../profiles/programming.nix
+    ../../profiles/signaged_dev.nix
     ../../profiles/unfree.nix
   ];
 

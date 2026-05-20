@@ -3,6 +3,8 @@
   services.xserver = {
     enable     = true;
     xkb.layout = "de";
+    autoRepeatDelay = 180;
+    autoRepeatInterval = 20;
   };
 
   services.desktopManager.plasma6.enable = true;

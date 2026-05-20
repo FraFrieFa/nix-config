@@ -66,11 +66,6 @@ in
     experimental-features = [ "nix-command" "flakes" ];
     auto-optimise-store   = true;
   };
-  nix.gc = {
-    automatic = true;
-    dates     = "weekly";
-    options   = "--delete-older-than 30d";
-  };
 
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
@@ -94,7 +89,7 @@ in
     "kernel.kptr_restrict"             = 2;
     "kernel.dmesg_restrict"            = 1;
     "kernel.unprivileged_bpf_disabled" = 1;
-    "kernel.yama.ptrace_scope"         = 2;
+    "kernel.yama.ptrace_scope"         = 1;
     "kernel.core_pattern"              = "|/bin/false";
     "net.core.bpf_jit_harden"         = 2;
     "net.ipv4.conf.all.rp_filter"     = 1;
@@ -110,7 +105,20 @@ in
     enable       = true;
     settings.cue = true;
   };
-  security.pam.services.login.u2fAuth = true;
+  security.pam.services = {
+    login = {
+      u2fAuth = true;
+      unixAuth = false;
+    };
+    sddm = {
+      u2fAuth = true;
+      unixAuth = false;
+    };
+    sudo = {
+      u2fAuth = true;
+      unixAuth = false;
+    };
+  };
 
   networking.firewall.enable    = true;
   networking.firewall.allowPing = false;

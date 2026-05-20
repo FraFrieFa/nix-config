@@ -5,6 +5,7 @@
     ../../profiles/desktop.nix
     ../../profiles/gaming.nix
     ../../profiles/programming.nix
+    ../../profiles/signaged_dev.nix
     ../../profiles/unfree.nix
   ];
 
