@@ -108,15 +108,15 @@ in
   security.pam.services = {
     login = {
       u2fAuth = true;
-      unixAuth = false;
+      unixAuth = true;
     };
     sddm = {
       u2fAuth = true;
-      unixAuth = false;
+      unixAuth = true;
     };
     sudo = {
       u2fAuth = true;
-      unixAuth = false;
+      unixAuth = true;
     };
   };
 
