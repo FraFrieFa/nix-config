@@ -8,11 +8,27 @@
   };
 
   services.desktopManager.plasma6.enable = true;
+  environment.plasma6.excludePackages = with pkgs.kdePackages; [
+    discover
+  ];
+
+  xdg.portal = {
+    config.common.default = "kde";
+    extraPortals = lib.mkForce [
+      pkgs.kdePackages.xdg-desktop-portal-kde
+    ];
+  };
 
   services.displayManager.sddm = {
     enable          = true;
     wayland.enable  = true;
   };
+
+  services.displayManager.autoLogin = {
+    enable = true;
+    user = "fabius";
+  };
+  services.displayManager.defaultSession = "plasmax11";
 
   programs.firefox = {
     enable = true;
@@ -23,6 +39,16 @@
       };
     };
   };
+
+  environment.etc."xdg/autostart/firefox.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Firefox
+    Exec=${lib.getExe pkgs.firefox}
+    Terminal=false
+    X-GNOME-Autostart-enabled=true
+    OnlyShowIn=KDE;
+  '';
 
   environment.systemPackages = with pkgs; [
     htop

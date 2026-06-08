@@ -26,8 +26,10 @@
     powerManagement.enable = false;
     open = false;
     nvidiaSettings = true;
-    package = config.boot.kernelPackages.nvidiaPackages.stable;
+    package = config.boot.kernelPackages.nvidiaPackages.legacy_580;
   };
+
+  boot.kernelModules = lib.mkForce [ "atkbd" "ctr" "loop" "uinput" ];
 
   system.stateVersion = "26.05";
 }

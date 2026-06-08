@@ -21,6 +21,7 @@ in
     nodejs_22
     playwright-driver
     playwright-mcp
+    rust-analyzer
   ] ++ [
     pkgs-unstable.codex
   ];

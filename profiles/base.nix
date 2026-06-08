@@ -30,6 +30,15 @@ in
     keyMap = "de";
   };
 
+  fonts.packages = with pkgs; [
+    noto-fonts
+    noto-fonts-color-emoji
+    liberation_ttf
+    dejavu_fonts
+  ];
+
+  fonts.fontconfig.enable = true;
+
   programs.nano = {
     enable = true;
     nanorc = ''
@@ -54,6 +63,7 @@ in
       nomSandbox
       usbutils
       pciutils
+      unzip
     ];
   };
 
@@ -67,7 +77,7 @@ in
     auto-optimise-store   = true;
   };
 
-  boot.kernelPackages = pkgs.linuxPackages_latest;
+  boot.kernelPackages = pkgs.linuxPackages;
 
   zramSwap = {
     enable    = true;
@@ -83,6 +93,7 @@ in
     "debugfs=off"
     "page_alloc.shuffle=1"
     "randomize_kstack_offset=on"
+    "8250.nr_uarts=0"
   ];
 
   boot.kernel.sysctl = {
