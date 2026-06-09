@@ -37,6 +37,11 @@
       ];
     };
 
+    nixosConfigurations.miix310 = nixpkgs.lib.nixosSystem {
+      inherit system;
+      modules = [ ./hosts/miix310/default.nix ];
+    };
+
     nixosConfigurations.installer = nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = { flakeSelf = self; inherit configRepo; };
