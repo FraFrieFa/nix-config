@@ -1,4 +1,24 @@
 { config, lib, pkgs, ... }:
+let
+  autoRotateScript = pkgs.writeShellScript "auto-rotate" ''
+    # Wait for sway to be ready
+    sleep 2
+    ${pkgs.iio-sensor-proxy}/bin/monitor-sensor 2>&1 \
+      | grep --line-buffered "orientation" \
+      | sed -u 's/.*orientation: //' \
+      | while IFS= read -r orientation; do
+          case "$orientation" in
+            # MIIX 310: panel is physically landscape, kernel rotate=90 makes it portrait.
+            # Sway sees portrait as the baseline — these transforms are additive.
+            # Adjust if rotation direction is wrong after physical testing.
+            normal)    ${pkgs.sway}/bin/swaymsg output DSI-1 transform 90 ;;
+            bottom-up) ${pkgs.sway}/bin/swaymsg output DSI-1 transform 270 ;;
+            left-up)   ${pkgs.sway}/bin/swaymsg output DSI-1 transform normal ;;
+            right-up)  ${pkgs.sway}/bin/swaymsg output DSI-1 transform 180 ;;
+          esac
+        done
+  '';
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -21,42 +41,76 @@
     "i915.force_probe=*"
     # Cherry Trail: limit deep C-states to reduce system freeze risk
     "intel_idle.max_cstate=1"
-    # Disable EFI framebuffer so simpledrm never attaches during early boot.
-    # Without this, simpledrm grabs the EFI fb at ~1 s, then i915 has to fight
-    # it for the rotated DSI panel — causing display glitches and freezes.
-    # Equivalent to removing 'kms' from CachyOS initcpio: screen is blank
-    # until i915 initialises at ~20 s, then portrait mode is correct.
+    # Disable EFI framebuffer — prevents simpledrm from attaching during early
+    # boot, eliminating the simpledrm→i915 handoff glitch on the rotated DSI panel
     "video=efifb:off"
   ];
 
   # axp288_charger polls I2C5 aggressively and causes repeated timeouts.
-  # axp288_fuel_gauge is intentionally NOT blacklisted — kernel 6.18 handles
-  # single-probe failures gracefully; unblocking it enables battery reporting.
   boot.blacklistedKernelModules = [ "axp288_charger" ];
 
-  # loglevel=8 in kernelParams sets it at boot, but systemd resets printk to 4.
+  # loglevel=8 at boot; systemd resets printk to 4 otherwise.
   boot.kernel.sysctl."kernel.printk" = "8 4 1 7";
 
   # ── initrd ────────────────────────────────────────────────────────────────────
-  # i915 must stay out of initrd — loading it early breaks display stride.
-  # Early boot shows EFI framebuffer (wrong orientation); correct display
-  # appears after i915 loads at ~20 s.
-  boot.initrd.kernelModules = [ "mmc_block" "crc32c" ];
+  # Force-load eMMC host controller early so the root device appears sooner,
+  # cutting ~2 s off the initrd phase.
+  # i915 stays out — loading it early breaks display stride on this panel.
+  boot.initrd.kernelModules = [ "sdhci_acpi" "mmc_block" "crc32c" ];
 
   # ── base.nix overrides ────────────────────────────────────────────────────────
-  # Allow dmesg without sudo — useful while this device is still unstable
   boot.kernel.sysctl."kernel.dmesg_restrict" = lib.mkForce 0;
-  # No U2F hardware on the tablet
-  security.pam.u2f.enable = lib.mkForce false;
-  # Passwordless sudo on personal device
-  security.sudo.wheelNeedsPassword = lib.mkForce false;
+  security.pam.u2f.enable               = lib.mkForce false;
+  security.sudo.wheelNeedsPassword       = lib.mkForce false;
 
   # ── Firmware / GPU ────────────────────────────────────────────────────────────
   hardware.enableRedistributableFirmware = true;
   hardware.graphics.enable = true;
 
+  # ── Accelerometer / auto-rotate ───────────────────────────────────────────────
+  hardware.sensor.iio.enable = true;  # iio-sensor-proxy daemon
+
   # ── Battery ───────────────────────────────────────────────────────────────────
   services.upower.enable = true;
+
+  # ── Thermal management ────────────────────────────────────────────────────────
+  services.thermald.enable = true;
+
+  # ── DNS ───────────────────────────────────────────────────────────────────────
+  services.resolved.enable = true;
+  networking.networkmanager.dns = "systemd-resolved";
+
+  # ── Boot: don't block on network being online ─────────────────────────────────
+  systemd.services.NetworkManager-wait-online.enable = false;
+
+  # ── Audio ─────────────────────────────────────────────────────────────────────
+  security.rtkit.enable = true;
+  services.pipewire = {
+    enable = true;
+    alsa.enable = true;
+    alsa.support32Bit = true;
+    pulse.enable = true;
+  };
+  # rt5645 codec sometimes misses its I2C probe window at boot due to bus
+  # timing on Cherry Trail. This service re-binds it once the system is up.
+  systemd.services.rt5645-reprobe = {
+    description = "Re-probe rt5645 audio codec if initial probe failed";
+    after       = [ "multi-user.target" ];
+    wantedBy    = [ "multi-user.target" ];
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "rt5645-reprobe" ''
+        dev=/sys/bus/i2c/devices/i2c-10EC5645:00
+        drv=/sys/bus/i2c/drivers/rt5645
+        # Already probed successfully
+        [ -e "$drv/i2c-10EC5645:00" ] && exit 0
+        [ -e "$dev" ] || exit 0
+        sleep 3
+        echo "i2c-10EC5645:00" > "$drv/bind" 2>/dev/null || true
+      '';
+    };
+  };
 
   # ── Sway ──────────────────────────────────────────────────────────────────────
   programs.sway = {
@@ -64,9 +118,11 @@
     wrapperFeatures.gtk = true;
     extraPackages = with pkgs; [
       swaylock swayidle swaybg
-      waybar foot fuzzel alacritty wofi
+      waybar foot fuzzel
       grim slurp wl-clipboard
       mako brightnessctl pavucontrol
+      wvkbd          # on-screen keyboard
+      wl-mirror      # screen cast helper
     ];
   };
 
@@ -81,6 +137,80 @@
     };
   };
 
+  # ── Waybar ────────────────────────────────────────────────────────────────────
+  environment.etc."xdg/waybar/config".text = builtins.toJSON {
+    layer    = "top";
+    position = "top";
+    height   = 36;
+    modules-left   = [ "sway/workspaces" "sway/mode" ];
+    modules-center = [ "clock" ];
+    modules-right  = [ "battery" "backlight" "pulseaudio" "network" ];
+
+    "sway/workspaces" = { disable-scroll = true; };
+    "sway/mode"       = { format = "<span style='italic'>{}</span>"; };
+
+    clock = { format = "  {:%Y-%m-%d  %H:%M}"; tooltip = false; };
+
+    battery = {
+      format          = "{icon}  {capacity}%";
+      format-charging = "  {capacity}%";
+      format-icons    = [ "" "" "" "" "" ];
+      states          = { warning = 30; critical = 15; };
+      tooltip         = false;
+    };
+
+    backlight = {
+      device         = "intel_backlight";
+      format         = "  {percent}%";
+      on-scroll-up   = "${pkgs.brightnessctl}/bin/brightnessctl set 5%+";
+      on-scroll-down = "${pkgs.brightnessctl}/bin/brightnessctl set 5%-";
+      tooltip        = false;
+    };
+
+    pulseaudio = {
+      format        = "{icon}  {volume}%";
+      format-muted  = "  muted";
+      format-icons  = { default = [ "" "" "" ]; };
+      on-click      = "${pkgs.pavucontrol}/bin/pavucontrol";
+      tooltip       = false;
+    };
+
+    network = {
+      format-wifi         = "  {essid}";
+      format-disconnected = "  offline";
+      tooltip             = false;
+    };
+  };
+
+  environment.etc."xdg/waybar/style.css".text = ''
+    * {
+      font-family: "Noto Sans", monospace;
+      font-size: 14px;
+      min-height: 0;
+    }
+    window#waybar {
+      background: rgba(30, 30, 46, 0.92);
+      color: #cdd6f4;
+      border-bottom: 2px solid #313244;
+    }
+    #workspaces button {
+      padding: 0 8px;
+      color: #6c7086;
+      background: transparent;
+      border: none;
+    }
+    #workspaces button.focused, #workspaces button.active {
+      color: #cba6f7;
+    }
+    #clock, #battery, #backlight, #pulseaudio, #network, #mode {
+      padding: 0 12px;
+    }
+    #battery.warning  { color: #fab387; }
+    #battery.critical { color: #f38ba8; }
+    #mode { background: #cba6f7; color: #1e1e2e; }
+  '';
+
+  # ── Sway config ───────────────────────────────────────────────────────────────
   environment.etc."sway/config".text = ''
     set $mod Mod1
     set $left h
@@ -90,10 +220,12 @@
     set $term foot
     set $menu fuzzel --show run --no-icons
 
-    output * bg #1a1a2e solid_color
+    output DSI-1 bg #1e1e2e solid_color
 
     input type:keyboard {
         xkb_layout "de"
+        repeat_delay 250
+        repeat_rate  40
     }
 
     input type:touchscreen {
@@ -101,9 +233,23 @@
         map_to_output DSI-1
     }
 
+    # ── Startup ──────────────────────────────────────────────────────────────────
+    exec waybar
+    exec mako
+    exec exec ${autoRotateScript}
+    exec swayidle -w \
+        timeout 120 '${pkgs.brightnessctl}/bin/brightnessctl set 20%' \
+        resume  '${pkgs.brightnessctl}/bin/brightnessctl set 100%' \
+        timeout 300 '${pkgs.swaylock}/bin/swaylock -f -c 1e1e2e' \
+        timeout 360 'swaymsg "output * dpms off"' \
+        resume  'swaymsg "output * dpms on"' \
+        before-sleep '${pkgs.swaylock}/bin/swaylock -f -c 1e1e2e'
+
+    # ── Bindings ─────────────────────────────────────────────────────────────────
     bindsym $mod+Return exec $term
     bindsym $mod+Shift+q kill
     bindsym $mod+d exec $menu
+    bindsym $mod+o exec ${pkgs.wvkbd}/bin/wvkbd-mobintl  # on-screen keyboard
     floating_modifier $mod normal
 
     bindsym $mod+$left  focus left
@@ -129,22 +275,12 @@
     bindsym $mod+3 workspace number 3
     bindsym $mod+4 workspace number 4
     bindsym $mod+5 workspace number 5
-    bindsym $mod+6 workspace number 6
-    bindsym $mod+7 workspace number 7
-    bindsym $mod+8 workspace number 8
-    bindsym $mod+9 workspace number 9
-    bindsym $mod+0 workspace number 10
 
     bindsym $mod+Shift+1 move container to workspace number 1
     bindsym $mod+Shift+2 move container to workspace number 2
     bindsym $mod+Shift+3 move container to workspace number 3
     bindsym $mod+Shift+4 move container to workspace number 4
     bindsym $mod+Shift+5 move container to workspace number 5
-    bindsym $mod+Shift+6 move container to workspace number 6
-    bindsym $mod+Shift+7 move container to workspace number 7
-    bindsym $mod+Shift+8 move container to workspace number 8
-    bindsym $mod+Shift+9 move container to workspace number 9
-    bindsym $mod+Shift+0 move container to workspace number 10
 
     bindsym $mod+b splith
     bindsym $mod+v splitv
@@ -176,26 +312,12 @@
     bindsym --locked XF86AudioLowerVolume exec pactl set-sink-volume @DEFAULT_SINK@ -5%
     bindsym --locked XF86AudioRaiseVolume exec pactl set-sink-volume @DEFAULT_SINK@ +5%
     bindsym --locked XF86AudioMicMute     exec pactl set-source-mute @DEFAULT_SOURCE@ toggle
-    bindsym --locked XF86MonBrightnessDown exec brightnessctl set 5%-
-    bindsym --locked XF86MonBrightnessUp   exec brightnessctl set 5%+
-    bindsym Print exec grim
+    bindsym --locked XF86MonBrightnessDown exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%-
+    bindsym --locked XF86MonBrightnessUp   exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%+
+    bindsym Print exec ${pkgs.grim}/bin/grim
 
     bindsym $mod+Shift+e exec swaymsg exit
     bindsym $mod+Shift+r reload
-
-    bar {
-        position top
-        status_command while :; do \
-          bat=$(cat /sys/class/power_supply/axp288_fuel_gauge/capacity 2>/dev/null); \
-          [ -n "$bat" ] && printf "  %s  bat:%s%%\\n" "$(date +'%Y-%m-%d %H:%M:%S')" "$bat" \
-                        || date +"  %Y-%m-%d  %H:%M:%S"; \
-          sleep 5; done
-        colors {
-            statusline #ffffff
-            background #323232
-            inactive_workspace #32323200 #32323200 #5c5c5c
-        }
-    }
 
     include /etc/sway/config.d/*
   '';
@@ -206,15 +328,6 @@
   # ── Bluetooth ─────────────────────────────────────────────────────────────────
   hardware.bluetooth.enable = true;
   hardware.bluetooth.powerOnBoot = true;
-
-  # ── Audio ─────────────────────────────────────────────────────────────────────
-  security.rtkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-  };
 
   # ── Locale extras (base.nix covers timezone and defaultLocale) ────────────────
   i18n.extraLocaleSettings.LC_TIME     = "de_DE.UTF-8";
@@ -228,10 +341,9 @@
   };
 
   # ── User ──────────────────────────────────────────────────────────────────────
-  # base.nix provides: isNormalUser, shell, extraGroups base set, nomSandbox etc.
   users.users.fabius = {
     description  = "Fabius";
-    extraGroups  = [ "input" ];
+    extraGroups  = [ "input" "video" ];
     initialPassword = "nixos";
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY1Ph0sLtoppnck/L1R6PhstsqllBh3pI/cJcGwI7U/ lenovo-miix310"
@@ -242,6 +354,7 @@
   environment.systemPackages = with pkgs; [
     vim git wget curl htop
     firefox networkmanagerapplet
+    playerctl  # media key control
   ];
 
   nixpkgs.config.allowUnfree = true;
