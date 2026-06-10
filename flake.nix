@@ -39,7 +39,15 @@
 
     nixosConfigurations.miix310 = nixpkgs.lib.nixosSystem {
       inherit system;
-      modules = [ ./hosts/miix310/default.nix ];
+      specialArgs = {
+        pkgs-unstable = import nixpkgs-unstable {
+          inherit system;
+          config.allowUnfree = true;
+        };
+      };
+      modules = [
+        ./hosts/miix310/default.nix
+      ];
     };
 
     nixosConfigurations.installer = nixpkgs.lib.nixosSystem {

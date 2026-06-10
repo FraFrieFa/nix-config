@@ -1,6 +1,10 @@
 { config, lib, pkgs, ... }:
 {
-  imports = [ ./hardware-configuration.nix ];
+  imports = [
+    ./hardware-configuration.nix
+    ../../profiles/base.nix
+    ../../profiles/programming.nix
+  ];
 
   # ── Bootloader ────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
@@ -15,18 +19,44 @@
     "video=DSI-1:800x1280@60,rotate=90"
     "i915.enable_dpcd_backlight=0"
     "i915.force_probe=*"
-    "i915.mipi_backlight=2"
+    # Cherry Trail: limit deep C-states to reduce system freeze risk
+    "intel_idle.max_cstate=1"
+    # Disable EFI framebuffer so simpledrm never attaches during early boot.
+    # Without this, simpledrm grabs the EFI fb at ~1 s, then i915 has to fight
+    # it for the rotated DSI panel — causing display glitches and freezes.
+    # Equivalent to removing 'kms' from CachyOS initcpio: screen is blank
+    # until i915 initialises at ~20 s, then portrait mode is correct.
+    "video=efifb:off"
   ];
 
+  # axp288_charger polls I2C5 aggressively and causes repeated timeouts.
+  # axp288_fuel_gauge is intentionally NOT blacklisted — kernel 6.18 handles
+  # single-probe failures gracefully; unblocking it enables battery reporting.
+  boot.blacklistedKernelModules = [ "axp288_charger" ];
+
+  # loglevel=8 in kernelParams sets it at boot, but systemd resets printk to 4.
+  boot.kernel.sysctl."kernel.printk" = "8 4 1 7";
+
   # ── initrd ────────────────────────────────────────────────────────────────────
-  # i915 must stay out of initrd — loading it early breaks display stride
+  # i915 must stay out of initrd — loading it early breaks display stride.
+  # Early boot shows EFI framebuffer (wrong orientation); correct display
+  # appears after i915 loads at ~20 s.
   boot.initrd.kernelModules = [ "mmc_block" "crc32c" ];
 
-  # ── Firmware ──────────────────────────────────────────────────────────────────
-  hardware.enableRedistributableFirmware = true;
+  # ── base.nix overrides ────────────────────────────────────────────────────────
+  # Allow dmesg without sudo — useful while this device is still unstable
+  boot.kernel.sysctl."kernel.dmesg_restrict" = lib.mkForce 0;
+  # No U2F hardware on the tablet
+  security.pam.u2f.enable = lib.mkForce false;
+  # Passwordless sudo on personal device
+  security.sudo.wheelNeedsPassword = lib.mkForce false;
 
-  # ── GPU ───────────────────────────────────────────────────────────────────────
+  # ── Firmware / GPU ────────────────────────────────────────────────────────────
+  hardware.enableRedistributableFirmware = true;
   hardware.graphics.enable = true;
+
+  # ── Battery ───────────────────────────────────────────────────────────────────
+  services.upower.enable = true;
 
   # ── Sway ──────────────────────────────────────────────────────────────────────
   programs.sway = {
@@ -155,7 +185,11 @@
 
     bar {
         position top
-        status_command while :; do date +"  %Y-%m-%d  %H:%M:%S"; sleep 1; done
+        status_command while :; do \
+          bat=$(cat /sys/class/power_supply/axp288_fuel_gauge/capacity 2>/dev/null); \
+          [ -n "$bat" ] && printf "  %s  bat:%s%%\\n" "$(date +'%Y-%m-%d %H:%M:%S')" "$bat" \
+                        || date +"  %Y-%m-%d  %H:%M:%S"; \
+          sleep 5; done
         colors {
             statusline #ffffff
             background #323232
@@ -168,14 +202,12 @@
 
   # ── Networking ────────────────────────────────────────────────────────────────
   networking.hostName = "miix310";
-  networking.networkmanager.enable = true;
 
   # ── Bluetooth ─────────────────────────────────────────────────────────────────
   hardware.bluetooth.enable = true;
   hardware.bluetooth.powerOnBoot = true;
 
   # ── Audio ─────────────────────────────────────────────────────────────────────
-  services.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
     enable = true;
@@ -184,12 +216,9 @@
     pulse.enable = true;
   };
 
-  # ── Time / locale ─────────────────────────────────────────────────────────────
-  time.timeZone = "Europe/Berlin";
-  i18n.defaultLocale = "en_US.UTF-8";
+  # ── Locale extras (base.nix covers timezone and defaultLocale) ────────────────
   i18n.extraLocaleSettings.LC_TIME     = "de_DE.UTF-8";
   i18n.extraLocaleSettings.LC_MONETARY = "de_DE.UTF-8";
-  console.keyMap = "de";
 
   # ── SSH ───────────────────────────────────────────────────────────────────────
   services.openssh = {
@@ -198,18 +227,11 @@
     settings.PermitRootLogin = "no";
   };
 
-  # ── Sudo ──────────────────────────────────────────────────────────────────────
-  security.sudo.wheelNeedsPassword = false;
-
-  # ── Nix ───────────────────────────────────────────────────────────────────────
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
   # ── User ──────────────────────────────────────────────────────────────────────
+  # base.nix provides: isNormalUser, shell, extraGroups base set, nomSandbox etc.
   users.users.fabius = {
-    isNormalUser = true;
     description  = "Fabius";
-    extraGroups  = [ "wheel" "networkmanager" "audio" "video" "input" ];
-    shell        = pkgs.bash;
+    extraGroups  = [ "input" ];
     initialPassword = "nixos";
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY1Ph0sLtoppnck/L1R6PhstsqllBh3pI/cJcGwI7U/ lenovo-miix310"
