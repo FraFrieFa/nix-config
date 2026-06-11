@@ -64,11 +64,11 @@
       "nodes": {
         "nix-config": {
           "locked": {
-            "lastModified": 1781172285,
-            "narHash": "sha256-3sHwspnuwfgSbq3BjeelnjSJN1Y022bPgBlPSw+V/Ok=",
+            "lastModified": 1781172953,
+            "narHash": "sha256-106dMZ96JvlqqZztQnWbTmDhvuPdBUk6VYcs9VYPfik=",
             "owner": "FraFrieFa",
             "repo": "nix-config",
-            "rev": "250a543b1e3252026c1bee76f1eafd7d0fd69467",
+            "rev": "f55aefc3dcf827bb7c043def0d58e406452193f3",
             "type": "github"
           },
           "original": {
