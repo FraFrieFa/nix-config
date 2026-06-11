@@ -25,7 +25,7 @@
   in {
     nixosConfigurations.desktop = nixpkgs.lib.nixosSystem {
       inherit system;
-      specialArgs = { inherit pkgs-unstable; };
+      specialArgs = { flakeSelf = self; inherit pkgs-unstable; };
       modules = [
         disko.nixosModules.disko
         ./hosts/desktop/default.nix
@@ -34,7 +34,7 @@
 
     nixosConfigurations.workstation = nixpkgs.lib.nixosSystem {
       inherit system;
-      specialArgs = { inherit pkgs-unstable; };
+      specialArgs = { flakeSelf = self; inherit pkgs-unstable; };
       modules = [
         disko.nixosModules.disko
         ./hosts/workstation/default.nix
@@ -44,6 +44,7 @@
     nixosConfigurations.miix310 = nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = {
+        flakeSelf = self;
         pkgs-unstable = import nixpkgs-unstable {
           inherit system;
           config.allowUnfree = true;

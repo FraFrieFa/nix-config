@@ -1,4 +1,4 @@
-{ config, pkgs, lib, modulesPath, ... }:
+{ config, flakeSelf, pkgs, lib, modulesPath, ... }:
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
@@ -38,51 +38,7 @@
     "d /etc/nixos 0755 root root -"
   ];
 
-  environment.etc."nixos/flake.nix".text = ''
-    {
-      description = "Root-owned pinned entrypoint for this system config";
-
-      inputs.nix-config.url = "github:FraFrieFa/nix-config";
-
-      outputs = { nix-config, ... }: {
-        nixosConfigurations = nix-config.nixosConfigurations;
-      };
-    }
-  '';
-
-  system.activationScripts.seedNixosFlakeLock.text = ''
-    if [ ! -e /etc/nixos/flake.lock ]; then
-      cat > /etc/nixos/flake.lock <<'EOF'
-    {
-      "nodes": {
-        "nix-config": {
-          "locked": {
-            "lastModified": 1781171086,
-            "narHash": "sha256-uWsrMR6UkvpK9+uV79mH+AQm3UmSRDEGZDUbI5XQNpg=",
-            "owner": "FraFrieFa",
-            "repo": "nix-config",
-            "rev": "6fc83b0ce8bef7bfd421774b31537a79eceeb68f",
-            "type": "github"
-          },
-          "original": {
-            "owner": "FraFrieFa",
-            "repo": "nix-config",
-            "type": "github"
-          }
-        },
-        "root": {
-          "inputs": {
-            "nix-config": "nix-config"
-          }
-        }
-      },
-      "root": "root",
-      "version": 7
-    }
-    EOF
-      chmod 0644 /etc/nixos/flake.lock
-    fi
-  '';
+  environment.etc."nixos/flake.nix".source = "${flakeSelf}/flake.nix";
 
   security.sudo.wheelNeedsPassword = true;
   security.sudo.execWheelOnly      = true;
