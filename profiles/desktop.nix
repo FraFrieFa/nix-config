@@ -30,6 +30,8 @@
   };
   services.displayManager.defaultSession = "plasmax11";
 
+  services.fwupd.enable = false;
+
   programs.firefox = {
     enable = true;
     policies.ExtensionSettings = {
