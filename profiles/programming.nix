@@ -10,11 +10,7 @@ in
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
   };
 
-  environment.systemPackages = with pkgs; [
-    ripgrep
-    fd
-    jq
-    curl
+  users.users.fabius.packages = with pkgs; [
     pythonWithBrowserAutomation
     gcc
     geckodriver

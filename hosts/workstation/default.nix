@@ -1,6 +1,8 @@
 { config, pkgs, lib, ... }:
 {
   imports = [
+    ../../profiles/base.nix
+    ../../profiles/fabius-default.nix
     ../../profiles/disk.nix
     ../../profiles/desktop.nix
     ../../profiles/programming.nix
@@ -9,6 +11,11 @@
   ];
 
   networking.hostName = "workstation";
+
+  local.disk.full_disk = {
+    id = "REPLACE-ME-workstation";
+    overProvisioning = "100G";
+  };
 
   users.users.fabius.packages = with pkgs; [
     screen

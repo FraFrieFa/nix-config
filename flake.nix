@@ -4,9 +4,13 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, disko, ... }:
   let
     system = "x86_64-linux";
     configRepo = "https://github.com/FraFrieFa/nix-config"; # set to "" to disable GitHub pull
@@ -23,7 +27,7 @@
       inherit system;
       specialArgs = { inherit pkgs-unstable; };
       modules = [
-        ./profiles/base.nix
+        disko.nixosModules.disko
         ./hosts/desktop/default.nix
       ];
     };
@@ -32,7 +36,7 @@
       inherit system;
       specialArgs = { inherit pkgs-unstable; };
       modules = [
-        ./profiles/base.nix
+        disko.nixosModules.disko
         ./hosts/workstation/default.nix
       ];
     };

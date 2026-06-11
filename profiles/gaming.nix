@@ -69,7 +69,7 @@ in
     ];
   };
 
-  environment.systemPackages = with pkgs; [
+  users.users.fabius.packages = with pkgs; [
     dota2
     dota2DesktopItem
     gamescope

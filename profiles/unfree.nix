@@ -1,6 +1,6 @@
 { pkgs-unstable, ... }:
 {
-  environment.systemPackages = [
+  users.users.fabius.packages = [
     pkgs-unstable.claude-code
     pkgs-unstable.teamspeak6-client
   ];

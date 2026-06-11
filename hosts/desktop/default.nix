@@ -1,6 +1,8 @@
 { config, pkgs, lib, ... }:
 {
   imports = [
+    ../../profiles/base.nix
+    ../../profiles/fabius-default.nix
     ../../profiles/disk.nix
     ../../profiles/desktop.nix
     ../../profiles/gaming.nix
@@ -11,7 +13,12 @@
 
   networking.hostName = "desktop";
 
-  environment.systemPackages = with pkgs; [
+  local.disk.full_disk = {
+    id = "nvme-Samsung_SSD_990_PRO_2TB_S7DNNJ0X226913W";
+    overProvisioning = "400G";
+  };
+
+  users.users.fabius.packages = with pkgs; [
     libfido2
     yubikey-manager
   ];

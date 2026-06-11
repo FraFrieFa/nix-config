@@ -1,6 +1,6 @@
 { pkgs, ... }:
 {
-  environment.systemPackages = with pkgs; [
+  users.users.fabius.packages = with pkgs; [
     ffmpeg
   ];
 

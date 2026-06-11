@@ -50,11 +50,6 @@
     OnlyShowIn=KDE;
   '';
 
-  environment.systemPackages = with pkgs; [
-    htop
-    git
-  ];
-
   services.pipewire = {
     enable            = true;
     alsa.enable       = true;

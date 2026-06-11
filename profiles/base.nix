@@ -1,23 +1,4 @@
 { config, pkgs, lib, modulesPath, ... }:
-let
-  nomSandbox = pkgs.writeShellApplication {
-    name = "nom";
-    runtimeInputs = [ pkgs.bubblewrap ];
-    text = ''
-      exec bwrap \
-        --clearenv \
-        --setenv HOME /tmp \
-        --setenv XDG_CACHE_HOME /tmp \
-        --setenv TERM "''${TERM:-xterm-256color}" \
-        --unshare-all \
-        --die-with-parent \
-        --new-session \
-        --ro-bind /nix/store /nix/store \
-        --dir /tmp \
-        ${lib.getExe pkgs.nix-output-monitor} "$@"
-    '';
-  };
-in
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
@@ -53,21 +34,55 @@ in
 
   networking.networkmanager.enable = true;
 
-  users.groups.nixos-config = {};
+  systemd.tmpfiles.rules = [
+    "d /etc/nixos 0755 root root -"
+  ];
 
-  users.users.fabius = {
-    isNormalUser = true;
-    extraGroups  = [ "wheel" "networkmanager" "video" "audio" "nixos-config" ];
-    shell        = pkgs.bash;
-    packages = with pkgs; [
-      nomSandbox
-      usbutils
-      pciutils
-      unzip
-    ];
-  };
+  environment.etc."nixos/flake.nix".text = ''
+    {
+      description = "Root-owned pinned entrypoint for this system config";
 
-  users.users.root.hashedPassword = "!";
+      inputs.nix-config.url = "github:FraFrieFa/nix-config";
+
+      outputs = { nix-config, ... }: {
+        nixosConfigurations = nix-config.nixosConfigurations;
+      };
+    }
+  '';
+
+  system.activationScripts.seedNixosFlakeLock.text = ''
+    if [ ! -e /etc/nixos/flake.lock ]; then
+      cat > /etc/nixos/flake.lock <<'EOF'
+    {
+      "nodes": {
+        "nix-config": {
+          "locked": {
+            "lastModified": 1781041147,
+            "narHash": "sha256-hlK1ev7c19G1m5hF4qv6Su5QIbuMHgZ50ns8uHi09pY=",
+            "owner": "FraFrieFa",
+            "repo": "nix-config",
+            "rev": "4f65ca5301f255277b847ee2fd44a994fe7c0ac5",
+            "type": "github"
+          },
+          "original": {
+            "owner": "FraFrieFa",
+            "repo": "nix-config",
+            "type": "github"
+          }
+        },
+        "root": {
+          "inputs": {
+            "nix-config": "nix-config"
+          }
+        }
+      },
+      "root": "root",
+      "version": 7
+    }
+    EOF
+      chmod 0644 /etc/nixos/flake.lock
+    fi
+  '';
 
   security.sudo.wheelNeedsPassword = true;
   security.sudo.execWheelOnly      = true;

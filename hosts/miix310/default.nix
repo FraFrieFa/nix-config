@@ -22,7 +22,9 @@ in
 {
   imports = [
     ./hardware-configuration.nix
+    ./custom-kernel.nix
     ../../profiles/base.nix
+    ../../profiles/fabius-default.nix
     ../../profiles/programming.nix
   ];
 
@@ -53,15 +55,22 @@ in
   boot.kernel.sysctl."kernel.printk" = "8 4 1 7";
 
   # ── initrd ────────────────────────────────────────────────────────────────────
-  # Force-load eMMC host controller early so the root device appears sooner,
-  # cutting ~2 s off the initrd phase.
-  # i915 stays out — loading it early breaks display stride on this panel.
-  boot.initrd.kernelModules = [ "sdhci_acpi" "mmc_block" "crc32c" ];
+  # The custom MIIX kernel builds the boot-critical tablet drivers in directly:
+  # eMMC/SDHCI, xHCI, USB HID, ext4, vfat, and CRC support.  Do not pull the
+  # generic NixOS initrd module set; it includes unused SATA/NVMe modules such
+  # as ahci, which this deliberately minimal kernel does not build.
+  boot.initrd.includeDefaultModules = false;
+  boot.initrd.availableKernelModules = lib.mkForce [ ];
+  boot.initrd.kernelModules = lib.mkForce [ ];
+  boot.kernelModules = lib.mkForce [ ];
 
   # ── base.nix overrides ────────────────────────────────────────────────────────
   boot.kernel.sysctl."kernel.dmesg_restrict" = lib.mkForce 0;
   security.pam.u2f.enable               = lib.mkForce false;
   security.sudo.wheelNeedsPassword       = lib.mkForce false;
+
+  # Allow wheel users to push store paths from the PC for remote deployment
+  nix.settings.trusted-users = [ "root" "@wheel" ];
 
   # ── Firmware / GPU ────────────────────────────────────────────────────────────
   hardware.enableRedistributableFirmware = true;
@@ -340,21 +349,16 @@ in
     settings.PermitRootLogin = "no";
   };
 
-  # ── User ──────────────────────────────────────────────────────────────────────
-  users.users.fabius = {
-    description  = "Fabius";
-    extraGroups  = [ "input" "video" ];
-    initialPassword = "nixos";
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY1Ph0sLtoppnck/L1R6PhstsqllBh3pI/cJcGwI7U/ lenovo-miix310"
-    ];
-  };
-
-  # ── Packages ──────────────────────────────────────────────────────────────────
-  environment.systemPackages = with pkgs; [
-    vim git wget curl htop
-    firefox networkmanagerapplet
-    playerctl  # media key control
+  # ── User extensions ───────────────────────────────────────────────────────────
+  users.users.fabius.extraGroups = lib.mkAfter [ "input" "video" ];
+  users.users.fabius.initialPassword = "nixos";
+  users.users.fabius.openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY1Ph0sLtoppnck/L1R6PhstsqllBh3pI/cJcGwI7U/ lenovo-miix310"
+  ];
+  users.users.fabius.packages = with pkgs; [
+    firefox
+    networkmanagerapplet
+    playerctl
   ];
 
   nixpkgs.config.allowUnfree = true;
