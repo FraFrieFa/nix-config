@@ -5,7 +5,7 @@ let
   # working copy that rebuilds read from directly. Bump configRev to roll the
   # pinned bootstrap version.
   configRepo = "https://github.com/FraFrieFa/nix-config";
-  configRev  = "ef8ffe9f037a554395e15d8645a8ee26ed0c0e46";
+  configRev  = "2ca76d3f7f013eea8b066d7e03d713e36730ad45";
 in
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
