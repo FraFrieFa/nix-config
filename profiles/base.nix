@@ -57,11 +57,11 @@
       "nodes": {
         "nix-config": {
           "locked": {
-            "lastModified": 1781041147,
-            "narHash": "sha256-hlK1ev7c19G1m5hF4qv6Su5QIbuMHgZ50ns8uHi09pY=",
+            "lastModified": 1781171086,
+            "narHash": "sha256-uWsrMR6UkvpK9+uV79mH+AQm3UmSRDEGZDUbI5XQNpg=",
             "owner": "FraFrieFa",
             "repo": "nix-config",
-            "rev": "4f65ca5301f255277b847ee2fd44a994fe7c0ac5",
+            "rev": "6fc83b0ce8bef7bfd421774b31537a79eceeb68f",
             "type": "github"
           },
           "original": {
