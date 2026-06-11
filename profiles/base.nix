@@ -39,6 +39,13 @@
   ];
 
   system.activationScripts.seedNixosEntrypoint.text = ''
+    if [ -L /etc/nixos ]; then
+      rm /etc/nixos
+    fi
+
+    mkdir -p /etc/nixos
+    chmod 0755 /etc/nixos
+
     if [ -L /etc/nixos/flake.nix ]; then
       rm /etc/nixos/flake.nix
     fi
