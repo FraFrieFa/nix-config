@@ -1,6 +1,26 @@
 { config, pkgs, lib, modulesPath, ... }:
+let
+  # Source of the system configuration. On first activation /etc/nixos is
+  # seeded from this specific commit, then becomes a mutable, group-writable
+  # working copy that rebuilds read from directly. Bump configRev to roll the
+  # pinned bootstrap version.
+  configRepo = "https://github.com/FraFrieFa/nix-config";
+  configRev  = "ef8ffe9f037a554395e15d8645a8ee26ed0c0e46";
+in
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
+
+  # /etc/nixos is owned root:nixos-config and group-writable so members of this
+  # group can edit the config in place. Note this makes the group effectively
+  # root-equivalent (rebuilds run activation as root) — only trusted users.
+  users.groups.nixos-config = {};
+
+  # /etc/nixos is root-owned but edited by group members, so git would refuse it
+  # as "dubious ownership". Mark it safe system-wide.
+  environment.etc."gitconfig".text = ''
+    [safe]
+        directory = /etc/nixos
+  '';
 
   time.timeZone = "Europe/Berlin";
   i18n.defaultLocale = "en_US.UTF-8";
@@ -34,67 +54,21 @@
 
   networking.networkmanager.enable = true;
 
-  systemd.tmpfiles.rules = [
-    "d /etc/nixos 0755 root root -"
-  ];
-
-  system.activationScripts.seedNixosEntrypoint.text = ''
-    if [ -L /etc/nixos ]; then
-      rm /etc/nixos
-    fi
-
-    mkdir -p /etc/nixos
-    chmod 0755 /etc/nixos
-
-    if [ -L /etc/nixos/flake.nix ]; then
-      rm /etc/nixos/flake.nix
-    fi
-
+  # Seed /etc/nixos with a pinned checkout of the config on first activation
+  # (i.e. only when it does not already exist). Afterwards it is a normal git
+  # working copy that members of the nixos-config group can edit in place.
+  system.activationScripts.seedNixosConfig.text = ''
     if [ ! -e /etc/nixos/flake.nix ]; then
-      cat > /etc/nixos/flake.nix <<'EOF'
-    {
-      description = "Root-owned pinned entrypoint for this system config";
+      export HOME=/root
+      export GIT_SSL_CAINFO=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 
-      inputs.nix-config.url = "github:FraFrieFa/nix-config";
+      rm -rf /etc/nixos
+      ${pkgs.git}/bin/git clone --quiet ${configRepo} /etc/nixos
+      ${pkgs.git}/bin/git -C /etc/nixos checkout --quiet ${configRev}
 
-      outputs = { nix-config, ... }: {
-        nixosConfigurations = nix-config.nixosConfigurations;
-      };
-    }
-    EOF
-      chmod 0644 /etc/nixos/flake.nix
-    fi
-
-    if [ ! -e /etc/nixos/flake.lock ]; then
-      cat > /etc/nixos/flake.lock <<'EOF'
-    {
-      "nodes": {
-        "nix-config": {
-          "locked": {
-            "lastModified": 1781173115,
-            "narHash": "sha256-XkX6+0dgLQuOVlw2u2Cm15GpHyKnrJ58vcsfGfI7Dng=",
-            "owner": "FraFrieFa",
-            "repo": "nix-config",
-            "rev": "8013093f5d957475982738a849113e93485450fa",
-            "type": "github"
-          },
-          "original": {
-            "owner": "FraFrieFa",
-            "repo": "nix-config",
-            "type": "github"
-          }
-        },
-        "root": {
-          "inputs": {
-            "nix-config": "nix-config"
-          }
-        }
-      },
-      "root": "root",
-      "version": 7
-    }
-    EOF
-      chmod 0644 /etc/nixos/flake.lock
+      chown -R root:nixos-config /etc/nixos
+      find /etc/nixos -type d -exec chmod 2775 {} +
+      find /etc/nixos -type f -exec chmod g+w {} +
     fi
   '';
 
