@@ -9,6 +9,7 @@ let
       type = "luks";
       name = "cryptroot";
       enrollFido2 = true;
+      askPassword = true;
       settings = {
         allowDiscards = true;
         bypassWorkqueues = true;

@@ -50,6 +50,7 @@
         };
       };
       modules = [
+        disko.nixosModules.disko
         ./hosts/miix310/default.nix
       ];
     };

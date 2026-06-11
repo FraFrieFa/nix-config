@@ -8,17 +8,7 @@
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
 
-  fileSystems."/" = {
-    device = "/dev/disk/by-uuid/6f77f530-bb5c-4bce-9ec9-3d9f378c110a";
-    fsType = "ext4";
-  };
-
-  fileSystems."/boot" = {
-    device  = "/dev/disk/by-uuid/4472-7C87";
-    fsType  = "vfat";
-    options = [ "fmask=0077" "dmask=0077" ];
-  };
-
+  # Root and /boot filesystems are declared by profiles/disk.nix (Disko).
   swapDevices = [ ];
 
   networking.useDHCP = lib.mkDefault true;

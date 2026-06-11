@@ -24,14 +24,28 @@ in
     ./hardware-configuration.nix
     ./custom-kernel.nix
     ../../profiles/base.nix
+    ../../profiles/disk.nix
     ../../profiles/fabius-default.nix
     ../../profiles/programming.nix
   ];
 
+  # ── Disk (Disko) ──────────────────────────────────────────────────────────────
+  # Whole-disk LUKS (FIDO2/YubiKey + passphrase) layout from profiles/disk.nix,
+  # applied to the 58GB eMMC. by-id basename of /dev/mmcblk0.
+  local.disk.full_disk = {
+    id = "mmc-HCG8e__0x1926946a";
+    overProvisioning = "5G";  # leave 5GB unpartitioned for eMMC endurance
+  };
+
   # ── Bootloader ────────────────────────────────────────────────────────────────
-  boot.loader.systemd-boot.enable = true;
+  # systemd-boot + EFI handling come from profiles/disk.nix. Two host overrides:
+  # this INSYDE/Cherry Trail firmware boots ONLY the removable-media fallback
+  # EFI/BOOT/BOOTX64.EFI (confirmed via `bootctl`) and the efivars-brick risk on
+  # this hardware class means we do NOT write EFI variables, and must NOT delete
+  # that fallback binary (disk.nix's removeGenericEfiFallback would brick boot).
   boot.loader.systemd-boot.configurationLimit = 5;
-  boot.loader.efi.canTouchEfiVariables = false;  # shared EFI partition with CachyOS
+  boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
+  system.activationScripts.removeGenericEfiFallback.text = lib.mkForce "";
 
   # ── Kernel params ─────────────────────────────────────────────────────────────
   boot.kernelParams = [
