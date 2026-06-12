@@ -8,13 +8,10 @@ let
       | sed -u 's/.*orientation: //' \
       | while IFS= read -r orientation; do
           case "$orientation" in
-            # MIIX 310: panel is physically landscape, kernel rotate=90 makes it portrait.
-            # Sway sees portrait as the baseline — these transforms are additive.
-            # Adjust if rotation direction is wrong after physical testing.
-            normal)    ${pkgs.sway}/bin/swaymsg output DSI-1 transform 90 ;;
-            bottom-up) ${pkgs.sway}/bin/swaymsg output DSI-1 transform 270 ;;
-            left-up)   ${pkgs.sway}/bin/swaymsg output DSI-1 transform normal ;;
-            right-up)  ${pkgs.sway}/bin/swaymsg output DSI-1 transform 180 ;;
+            normal)    ${pkgs.sway}/bin/swaymsg output DSI-1 transform normal ;;
+            bottom-up) ${pkgs.sway}/bin/swaymsg output DSI-1 transform 180 ;;
+            left-up)   ${pkgs.sway}/bin/swaymsg output DSI-1 transform 270 ;;
+            right-up)  ${pkgs.sway}/bin/swaymsg output DSI-1 transform 90 ;;
           esac
         done
   '';
@@ -45,22 +42,36 @@ in
   # that fallback binary (disk.nix's removeGenericEfiFallback would brick boot).
   boot.loader.systemd-boot.configurationLimit = 5;
   boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
+  boot.loader.timeout = lib.mkForce 1;
   system.activationScripts.removeGenericEfiFallback.text = lib.mkForce "";
 
   # ── Kernel params ─────────────────────────────────────────────────────────────
   boot.kernelParams = [
     "zswap.enabled=0"
-    "nowatchdog"
     "loglevel=8"
-    "video=DSI-1:800x1280@60,rotate=90"
     "i915.enable_dpcd_backlight=0"
     "i915.force_probe=*"
-    # Cherry Trail: limit deep C-states to reduce system freeze risk
-    "intel_idle.max_cstate=1"
-    # Disable EFI framebuffer — prevents simpledrm from attaching during early
-    # boot, eliminating the simpledrm→i915 handoff glitch on the rotated DSI panel
-    "video=efifb:off"
+    "panic=10"
+    "softlockup_panic=1"
+    "nmi_watchdog=panic"
+    "hung_task_panic=1"
   ];
+
+  systemd.settings.Manager = {
+    RuntimeWatchdogSec = "20s";
+    RebootWatchdogSec  = "30s";
+    KExecWatchdogSec   = "30s";
+  };
+
+  boot.kernel.sysctl = {
+    "kernel.panic"               = lib.mkForce 10;
+    "kernel.panic_on_oops"       = lib.mkForce 1;
+    "kernel.softlockup_panic"    = lib.mkForce 1;
+    "kernel.hardlockup_panic"    = lib.mkForce 1;
+    "kernel.hung_task_panic"     = lib.mkForce 1;
+    "kernel.hung_task_timeout_secs" = lib.mkForce 60;
+    "kernel.panic_on_rcu_stall"  = lib.mkForce 1;
+  };
 
   # axp288_charger polls I2C5 aggressively and causes repeated timeouts.
   boot.blacklistedKernelModules = [ "axp288_charger" ];
@@ -77,6 +88,12 @@ in
   boot.initrd.availableKernelModules = lib.mkForce [ ];
   boot.initrd.kernelModules = lib.mkForce [ ];
   boot.kernelModules = lib.mkForce [ ];
+
+  boot.initrd.extraFirmwarePaths = [
+    "intel/fw_sst_22a8.bin"
+    "regulatory.db"
+    "regulatory.db.p7s"
+  ];
 
   # ── base.nix overrides ────────────────────────────────────────────────────────
   boot.kernel.sysctl."kernel.dmesg_restrict" = lib.mkForce 0;
@@ -154,8 +171,8 @@ in
     settings = {
       terminal.vt = 1;
       default_session = {
-        command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd sway";
-        user = "greeter";
+        command = "${pkgs.sway}/bin/sway";
+        user = "fabius";
       };
     };
   };

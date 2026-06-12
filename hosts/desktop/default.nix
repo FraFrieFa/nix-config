@@ -9,6 +9,7 @@
     ../../profiles/programming.nix
     ../../profiles/signaged_dev.nix
     ../../profiles/unfree.nix
+    ../../profiles/dabp.nix
   ];
 
   networking.hostName = "desktop";

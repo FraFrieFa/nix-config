@@ -96,7 +96,6 @@ in
     "debugfs=off"
     "page_alloc.shuffle=1"
     "randomize_kstack_offset=on"
-    "8250.nr_uarts=0"
   ];
 
   boot.kernel.sysctl = {

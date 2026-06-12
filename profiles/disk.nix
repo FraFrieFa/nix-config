@@ -9,6 +9,7 @@ let
       type = "luks";
       name = "cryptroot";
       enrollFido2 = true;
+      extraFido2EnrollArgs = [ "--fido2-with-client-pin=no" ];
       askPassword = true;
       settings = {
         allowDiscards = true;
