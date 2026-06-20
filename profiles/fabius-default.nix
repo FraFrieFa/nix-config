@@ -11,6 +11,7 @@
       "video"
       "audio"
       "nixos-config"
+      "dialout"
     ];
     shell = pkgs.bash;
     packages = with pkgs; [

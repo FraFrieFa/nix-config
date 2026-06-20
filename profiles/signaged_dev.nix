@@ -1,5 +1,7 @@
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 {
+  users.users.fabius.extraGroups = lib.mkAfter [ "dialout" ];
+
   users.users.fabius.packages = with pkgs; [
     ffmpeg
   ];

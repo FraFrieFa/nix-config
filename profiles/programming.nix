@@ -18,6 +18,7 @@ in
     playwright-driver
     playwright-mcp
     rust-analyzer
+    file
   ] ++ [
     pkgs-unstable.codex
   ];

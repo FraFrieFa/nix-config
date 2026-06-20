@@ -45,10 +45,18 @@ in
   boot.loader.timeout = lib.mkForce 1;
   system.activationScripts.removeGenericEfiFallback.text = lib.mkForce "";
 
+  # Graphical initrd prompt for LUKS/FIDO2 unlock.
+  boot.plymouth.enable = true;
+  boot.plymouth.theme = "bgrt";
+
   # ── Kernel params ─────────────────────────────────────────────────────────────
   boot.kernelParams = [
     "zswap.enabled=0"
-    "loglevel=8"
+    "splash"
+    "quiet"
+    "udev.log_level=3"
+    "rd.systemd.show_status=false"
+    "systemd.show_status=false"
     "i915.enable_dpcd_backlight=0"
     "i915.force_probe=*"
     "panic=10"
@@ -76,9 +84,6 @@ in
   # axp288_charger polls I2C5 aggressively and causes repeated timeouts.
   boot.blacklistedKernelModules = [ "axp288_charger" ];
 
-  # loglevel=8 at boot; systemd resets printk to 4 otherwise.
-  boot.kernel.sysctl."kernel.printk" = "8 4 1 7";
-
   # ── initrd ────────────────────────────────────────────────────────────────────
   # The custom MIIX kernel builds the boot-critical tablet drivers in directly:
   # eMMC/SDHCI, xHCI, USB HID, ext4, vfat, and CRC support.  Do not pull the
@@ -94,6 +99,14 @@ in
     "regulatory.db"
     "regulatory.db.p7s"
   ];
+
+  # ── Fast init handoff ─────────────────────────────────────────────────────────
+  # Use nixos-init instead of the legacy initrd chroot prepare-root path.
+  system.nixos-init.enable = true;
+  system.etc.overlay.enable = true;
+  services.userborn.enable = true;
+
+  console.enable = lib.mkForce false;
 
   # ── base.nix overrides ────────────────────────────────────────────────────────
   boot.kernel.sysctl."kernel.dmesg_restrict" = lib.mkForce 0;
@@ -120,6 +133,19 @@ in
   services.resolved.enable = true;
   networking.networkmanager.dns = "systemd-resolved";
 
+  # Wi-Fi stability: RTL8723BS uses the old r8723bs staging driver. Its
+  # internal power-save modes and NetworkManager MAC randomization are both
+  # fragile on this SDIO chip, especially after sustained traffic.
+  networking.networkmanager.wifi.powersave = false;
+  networking.networkmanager.settings = {
+    device."wifi.scan-rand-mac-address" = "no";
+    connection."wifi.cloned-mac-address" = "preserve";
+  };
+
+  boot.extraModprobeConfig = "options r8723bs rtw_power_mgnt=0 rtw_ips_mode=0 rtw_smart_ps=0 rtw_low_power=0 rtw_ht_enable=0 rtw_bw_mode=0";
+
+  networking.firewall.enable = lib.mkForce false;
+
   # ── Boot: don't block on network being online ─────────────────────────────────
   systemd.services.NetworkManager-wait-online.enable = false;
 
@@ -135,8 +161,7 @@ in
   # timing on Cherry Trail. This service re-binds it once the system is up.
   systemd.services.rt5645-reprobe = {
     description = "Re-probe rt5645 audio codec if initial probe failed";
-    after       = [ "multi-user.target" ];
-    wantedBy    = [ "multi-user.target" ];
+
     serviceConfig = {
       Type            = "oneshot";
       RemainAfterExit = true;
@@ -152,12 +177,21 @@ in
     };
   };
 
+  systemd.timers.rt5645-reprobe = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "45s";
+      AccuracySec = "5s";
+      Unit = "rt5645-reprobe.service";
+    };
+  };
+
   # ── Sway ──────────────────────────────────────────────────────────────────────
   programs.sway = {
     enable = true;
     wrapperFeatures.gtk = true;
     extraPackages = with pkgs; [
-      swaylock swayidle swaybg
+      swayidle swaybg
       waybar foot fuzzel
       grim slurp wl-clipboard
       mako brightnessctl pavucontrol
@@ -166,12 +200,14 @@ in
     ];
   };
 
+  systemd.services.greetd.serviceConfig.Type = lib.mkForce "simple";
+
   services.greetd = {
     enable = true;
     settings = {
       terminal.vt = 1;
       default_session = {
-        command = "${pkgs.sway}/bin/sway";
+        command = "${pkgs.dbus}/bin/dbus-run-session ${pkgs.sway}/bin/sway";
         user = "fabius";
       };
     };
@@ -280,10 +316,7 @@ in
     exec swayidle -w \
         timeout 120 '${pkgs.brightnessctl}/bin/brightnessctl set 20%' \
         resume  '${pkgs.brightnessctl}/bin/brightnessctl set 100%' \
-        timeout 300 '${pkgs.swaylock}/bin/swaylock -f -c 1e1e2e' \
-        timeout 360 'swaymsg "output * dpms off"' \
-        resume  'swaymsg "output * dpms on"' \
-        before-sleep '${pkgs.swaylock}/bin/swaylock -f -c 1e1e2e'
+        before-sleep '${pkgs.brightnessctl}/bin/brightnessctl set 20%'
 
     # ── Bindings ─────────────────────────────────────────────────────────────────
     bindsym $mod+Return exec $term
