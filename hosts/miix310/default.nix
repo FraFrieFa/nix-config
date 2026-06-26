@@ -111,7 +111,6 @@ in
   # ── base.nix overrides ────────────────────────────────────────────────────────
   boot.kernel.sysctl."kernel.dmesg_restrict" = lib.mkForce 0;
   security.pam.u2f.enable               = lib.mkForce false;
-  security.sudo.wheelNeedsPassword       = lib.mkForce false;
 
   # Allow wheel users to push store paths from the PC for remote deployment
   nix.settings.trusted-users = [ "root" "@wheel" ];
