@@ -20,24 +20,35 @@
   };
 
   users.users.fabius.packages = with pkgs; [
+    ddcutil
     libfido2
     yubikey-manager
   ];
 
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
+  hardware.i2c.enable = true;
 
   services.xserver.videoDrivers = [ "nvidia" ];
 
   hardware.nvidia = {
     modesetting.enable = true;
-    powerManagement.enable = false;
+    powerManagement.enable = true;
     open = false;
     nvidiaSettings = true;
     package = config.boot.kernelPackages.nvidiaPackages.legacy_580;
   };
 
-  boot.kernelModules = lib.mkForce [ "atkbd" "ctr" "loop" "uinput" ];
+  boot.kernelParams = [
+    "nvidia.NVreg_TemporaryFilePath=/var/tmp"
+  ];
+
+  services.logind.settings.Login = {
+    HandlePowerKey = "poweroff";
+    PowerKeyIgnoreInhibited = true;
+  };
+
+  boot.kernelModules = lib.mkForce [ "atkbd" "ctr" "i2c-dev" "loop" "uinput" ];
 
   system.stateVersion = "26.05";
 }

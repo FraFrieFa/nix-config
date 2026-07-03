@@ -1,4 +1,12 @@
 { config, pkgs, lib, ... }:
+let
+  disableKWinTopLeftHotCorner = pkgs.writeShellScript "disable-kwin-top-left-hot-corner" ''
+    ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 --file kwinrc --group ElectricBorders --key TopLeft None
+    ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 --file kwinrc --group Effect-overview --key BorderActivate ""
+    ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 --file kwinrc --group Effect-overview --key TouchBorderActivate ""
+    ${pkgs.kdePackages.qttools}/bin/qdbus org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+  '';
+in
 {
   services.xserver = {
     enable     = true;
@@ -47,6 +55,25 @@
     Type=Application
     Name=Firefox
     Exec=${lib.getExe pkgs.firefox}
+    Terminal=false
+    X-GNOME-Autostart-enabled=true
+    OnlyShowIn=KDE;
+  '';
+
+  environment.etc."xdg/kwinrc".text = ''
+    [ElectricBorders]
+    TopLeft=None
+
+    [Effect-overview]
+    BorderActivate=
+    TouchBorderActivate=
+  '';
+
+  environment.etc."xdg/autostart/disable-kwin-top-left-hot-corner.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Disable KWin Top Left Hot Corner
+    Exec=${disableKWinTopLeftHotCorner}
     Terminal=false
     X-GNOME-Autostart-enabled=true
     OnlyShowIn=KDE;
