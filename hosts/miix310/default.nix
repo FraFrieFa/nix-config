@@ -24,6 +24,8 @@ in
     ../../profiles/disk.nix
     ../../profiles/fabius-default.nix
     ../../profiles/programming.nix
+    ../../profiles/unfree.nix
+    ../../profiles/signaged_dev.nix
   ];
 
   # ── Disk (Disko) ──────────────────────────────────────────────────────────────
@@ -109,7 +111,6 @@ in
   console.enable = lib.mkForce false;
 
   # ── base.nix overrides ────────────────────────────────────────────────────────
-  boot.kernel.sysctl."kernel.dmesg_restrict" = lib.mkForce 0;
   security.pam.u2f.enable               = lib.mkForce false;
 
   # Allow wheel users to push store paths from the PC for remote deployment.
@@ -149,6 +150,9 @@ in
   # ── Accelerometer / auto-rotate ───────────────────────────────────────────────
   hardware.sensor.iio.enable = true;  # iio-sensor-proxy daemon
 
+  # ── Power button ──────────────────────────────────────────────────────────────
+  services.logind.settings.Login.HandlePowerKey = "suspend";
+
   # ── Battery ───────────────────────────────────────────────────────────────────
   services.upower.enable = true;
 
@@ -169,8 +173,6 @@ in
   };
 
   boot.extraModprobeConfig = "options r8723bs rtw_power_mgnt=0 rtw_ips_mode=0 rtw_smart_ps=0 rtw_low_power=0 rtw_ht_enable=0 rtw_bw_mode=0";
-
-  networking.firewall.enable = lib.mkForce false;
 
   # ── Boot: don't block on network being online ─────────────────────────────────
   systemd.services.NetworkManager-wait-online.enable = false;
@@ -212,6 +214,9 @@ in
     };
   };
 
+  # Nerd Fonts symbols so waybar icons (battery, brightness, volume…) render.
+  fonts.packages = [ pkgs.nerd-fonts.symbols-only ];
+
   # ── Sway ──────────────────────────────────────────────────────────────────────
   programs.sway = {
     enable = true;
@@ -227,6 +232,28 @@ in
   };
 
   systemd.services.greetd.serviceConfig.Type = lib.mkForce "simple";
+
+  # Waybar starts after the PipeWire/Pulse socket exists so the volume module
+  # never has to retry-connect internally, which was the cause of the slow appearance.
+  systemd.user.services.waybar = {
+    description = "Waybar status bar";
+    after  = [ "pipewire-pulse.socket" ];
+    wants  = [ "pipewire-pulse.socket" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.waybar}/bin/waybar";
+      Restart    = "on-failure";
+      RestartSec = "2";
+    };
+  };
+
+  systemd.user.services.foot-server = {
+    description = "Foot terminal server";
+    serviceConfig = {
+      ExecStart = "${pkgs.foot}/bin/foot --server";
+      Restart    = "on-failure";
+      RestartSec = "1";
+    };
+  };
 
   services.greetd = {
     enable = true;
@@ -248,22 +275,26 @@ in
     modules-center = [ "clock" ];
     modules-right  = [ "battery" "backlight" "pulseaudio" "network" ];
 
-    "sway/workspaces" = { disable-scroll = true; };
+    "sway/workspaces" = {
+      disable-scroll = true;
+      all-outputs = true;
+      persistent-workspaces = { "1" = []; "2" = []; "3" = []; "4" = []; "5" = []; };
+    };
     "sway/mode"       = { format = "<span style='italic'>{}</span>"; };
 
-    clock = { format = "  {:%Y-%m-%d  %H:%M}"; tooltip = false; };
+    clock = { format = "  {:%Y-%m-%d  %H:%M}"; tooltip = false; };
 
     battery = {
       format          = "{icon}  {capacity}%";
-      format-charging = "  {capacity}%";
-      format-icons    = [ "" "" "" "" "" ];
+      format-charging = "  {capacity}%";
+      format-icons    = [ "" "" "" "" "" ];
       states          = { warning = 30; critical = 15; };
       tooltip         = false;
     };
 
     backlight = {
       device         = "intel_backlight";
-      format         = "  {percent}%";
+      format         = "  {percent}%";
       on-scroll-up   = "${pkgs.brightnessctl}/bin/brightnessctl set 5%+";
       on-scroll-down = "${pkgs.brightnessctl}/bin/brightnessctl set 5%-";
       tooltip        = false;
@@ -271,22 +302,22 @@ in
 
     pulseaudio = {
       format        = "{icon}  {volume}%";
-      format-muted  = "  muted";
-      format-icons  = { default = [ "" "" "" ]; };
+      format-muted  = "  muted";
+      format-icons  = { default = [ "" "" "" ]; };
       on-click      = "${pkgs.pavucontrol}/bin/pavucontrol";
       tooltip       = false;
     };
 
     network = {
-      format-wifi         = "  {essid}";
-      format-disconnected = "  offline";
+      format-wifi         = "  {essid}";
+      format-disconnected = "  offline";
       tooltip             = false;
     };
   };
 
   environment.etc."xdg/waybar/style.css".text = ''
     * {
-      font-family: "Noto Sans", monospace;
+      font-family: "Symbols Nerd Font Mono", "Noto Sans", monospace;
       font-size: 14px;
       min-height: 0;
     }
@@ -319,7 +350,7 @@ in
     set $down j
     set $up k
     set $right l
-    set $term foot
+    set $term footclient
     set $menu fuzzel --show run --no-icons
 
     output DSI-1 bg #1e1e2e solid_color
@@ -336,7 +367,7 @@ in
     }
 
     # ── Startup ──────────────────────────────────────────────────────────────────
-    exec waybar
+    exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP && systemctl --user start waybar foot-server
     exec mako
     exec exec ${autoRotateScript}
     exec swayidle -w \
@@ -383,8 +414,6 @@ in
 
     bindsym $mod+b splith
     bindsym $mod+v splitv
-    bindsym $mod+s layout stacking
-    bindsym $mod+w layout tabbed
     bindsym $mod+e layout toggle split
     bindsym $mod+f fullscreen
     bindsym $mod+Shift+space floating toggle
@@ -438,7 +467,6 @@ in
 
   # ── User extensions ───────────────────────────────────────────────────────────
   users.users.fabius.extraGroups = lib.mkAfter [ "input" "video" ];
-  users.users.fabius.initialPassword = "nixos";
   users.users.fabius.packages = with pkgs; [
     firefox
     networkmanagerapplet

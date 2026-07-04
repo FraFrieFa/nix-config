@@ -2294,7 +2294,8 @@ CONFIG_INTEL_MEI_PXP=y
 #
 CONFIG_SCSI_MOD=y
 # CONFIG_RAID_ATTRS is not set
-# CONFIG_SCSI is not set
+CONFIG_SCSI=y
+CONFIG_BLK_DEV_SD=y
 # end of SCSI device support
 
 # CONFIG_ATA is not set
@@ -4251,7 +4252,8 @@ CONFIG_MEDIA_USB_SUPPORT=y
 # CONFIG_USB_PWC is not set
 # CONFIG_USB_S2255 is not set
 # CONFIG_VIDEO_USBTV is not set
-# CONFIG_USB_VIDEO_CLASS is not set
+CONFIG_USB_VIDEO_CLASS=m
+CONFIG_USB_VIDEO_CLASS_INPUT_EVDEV=y
 
 #
 # Analog TV USB devices
@@ -6053,6 +6055,8 @@ CONFIG_USB_WDM=y
 #
 # NOTE: USB_STORAGE depends on SCSI but BLK_DEV_SD may also be needed; see USB_STORAGE Help for more info
 #
+CONFIG_USB_STORAGE=y
+CONFIG_USB_UAS=y
 
 #
 # USB Imaging devices
