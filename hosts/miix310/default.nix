@@ -112,8 +112,35 @@ in
   boot.kernel.sysctl."kernel.dmesg_restrict" = lib.mkForce 0;
   security.pam.u2f.enable               = lib.mkForce false;
 
-  # Allow wheel users to push store paths from the PC for remote deployment
-  nix.settings.trusted-users = [ "root" "@wheel" ];
+  # Allow wheel users to push store paths from the PC for remote deployment.
+  # The remote builder entry below is only an offload target; the miix can still
+  # build locally when workstation is absent or a derivation cannot be offloaded.
+  nix = {
+    distributedBuilds = true;
+    buildMachines = [
+      {
+        hostName = "workstation";
+        sshUser = "nixremote";
+        sshKey = "/root/.ssh/nixremote-workstation";
+        protocol = "ssh-ng";
+        system = "x86_64-linux";
+        maxJobs = 8;
+        speedFactor = 4;
+        supportedFeatures = [
+          "nixos-test"
+          "benchmark"
+          "big-parallel"
+          "kvm"
+        ];
+      }
+    ];
+
+    settings = {
+      trusted-users = [ "@wheel" ];
+      builders-use-substitutes = true;
+      max-jobs = "auto";
+    };
+  };
 
   # ── Firmware / GPU ────────────────────────────────────────────────────────────
   hardware.enableRedistributableFirmware = true;
@@ -406,18 +433,12 @@ in
   i18n.extraLocaleSettings.LC_MONETARY = "de_DE.UTF-8";
 
   # ── SSH ───────────────────────────────────────────────────────────────────────
-  services.openssh = {
-    enable = true;
-    settings.PasswordAuthentication = false;
-    settings.PermitRootLogin = "no";
-  };
+  # The miix only needs outbound SSH to use workstation as a remote builder.
+  services.openssh.enable = lib.mkForce false;
 
   # ── User extensions ───────────────────────────────────────────────────────────
   users.users.fabius.extraGroups = lib.mkAfter [ "input" "video" ];
   users.users.fabius.initialPassword = "nixos";
-  users.users.fabius.openssh.authorizedKeys.keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDY1Ph0sLtoppnck/L1R6PhstsqllBh3pI/cJcGwI7U/ lenovo-miix310"
-  ];
   users.users.fabius.packages = with pkgs; [
     firefox
     networkmanagerapplet

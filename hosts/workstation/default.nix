@@ -24,6 +24,21 @@
     v4l-utils
   ];
 
+  # Dedicated login for Nix remote builds from small LAN machines such as
+  # miix310. Add the miix310-generated public key here after creating it.
+  users.users.nixremote = {
+    isNormalUser = true;
+    description = "Nix remote build user";
+    openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIhxIG58pNvYbq8Pydptcw2H9+9QfNkjFu2yP6311ekE root@miix310 nix builder"
+    ];
+  };
+
+  nix.settings.trusted-users = [
+    "@wheel"
+    "nixremote"
+  ];
+
   services.openssh = {
     enable = true;
     openFirewall = true;
