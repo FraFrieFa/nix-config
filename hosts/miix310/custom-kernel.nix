@@ -23,13 +23,22 @@
 
 let
   baseKernel = pkgs.linuxPackages.kernel;
+  kernelPackages = pkgs.linuxPackages_custom {
+    inherit (baseKernel) version src modDirVersion;
+    configfile = ./kernel-config-6.18.34;
+    allowImportFromDerivation = false;
+  };
 in
 {
   boot.kernelPackages = lib.mkForce (
-    pkgs.linuxPackages_custom {
-      inherit (baseKernel) version src modDirVersion;
-      configfile = ./kernel-config-6.18.34;
-      allowImportFromDerivation = false;
-    }
+    kernelPackages.extend (_: super: {
+      kernel = super.kernel.overrideAttrs (old: {
+        passthru = (old.passthru or {}) // {
+          features = (old.passthru.features or {}) // {
+            efiBootStub = true;
+          };
+        };
+      });
+    })
   );
 }
