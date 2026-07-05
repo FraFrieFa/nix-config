@@ -10,6 +10,7 @@
     theme = "dark";
     effortLevel = "low";
     alwaysThinkingEnabled = false;
+    permissions.defaultMode = "plan";
     attribution = {
       commit = "";
       pr = "";

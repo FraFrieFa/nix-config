@@ -4,6 +4,7 @@
 
   users.users.fabius.packages = with pkgs; [
     ffmpeg
+    cheese
   ];
 
   services.udev.extraRules = ''                                                                                                                                                                                                                                                                                             
