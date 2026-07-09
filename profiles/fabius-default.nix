@@ -13,7 +13,6 @@
       "nixos-config"
       "dialout"
     ];
-    shell = pkgs.bash;
     packages = with pkgs; [
       curl
       fd

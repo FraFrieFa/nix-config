@@ -47,6 +47,9 @@
     '';
   };
 
+  programs.zsh.enable = true;
+  users.defaultUserShell = pkgs.zsh;
+
   networking.networkmanager.enable = true;
 
   # Ensure /etc/nixos is a writable checkout of the config repository.
