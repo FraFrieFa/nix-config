@@ -58,22 +58,51 @@ in
   networking.networkmanager.enable = true;
 
   # Seed /etc/nixos with a pinned checkout of the config on first activation
-  # (i.e. only when it does not already exist). Afterwards it is a normal git
-  # working copy that members of the nixos-config group can edit in place.
-  system.activationScripts.seedNixosConfig.text = ''
-    if [ ! -e /etc/nixos/flake.nix ]; then
-      export HOME=/root
-      export GIT_SSL_CAINFO=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+  system.activationScripts.seedNixosConfig = {
+    deps = [ "users" ];
 
-      rm -rf /etc/nixos
-      ${pkgs.git}/bin/git clone --quiet ${configRepo} /etc/nixos
-      ${pkgs.git}/bin/git -C /etc/nixos checkout --quiet ${configRev}
+    text = let
+      user = "fabius";
+      group = "nixos-config";
+      path = "/etc/nixos";
+      repo = "https://github.com/FraFrieFa/nix-config";
+      rev = "2ca76d3f7f013eea8b066d7e03d713e36730ad45";
+    in ''
+      gitAsUser() {
+        ${pkgs.util-linux}/bin/runuser -u ${user} -- \
+          ${pkgs.coreutils}/bin/env \
+            GIT_SSL_CAINFO=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt \
+            ${pkgs.git}/bin/git "$@"
+      }
 
-      chown -R root:nixos-config /etc/nixos
-      find /etc/nixos -type d -exec chmod 2775 {} +
-      find /etc/nixos -type f -exec chmod g+w {} +
-    fi
-  '';
+      valid=false
+
+      if [ "$(${pkgs.coreutils}/bin/stat -c '%U:%G:%a' ${path} 2>/dev/null || true)" \
+           = "${user}:${group}:2775" ] &&
+         origin="$(gitAsUser -C ${path} remote get-url origin 2>/dev/null)" &&
+         [ "$origin" = "${repo}" ]; then
+        valid=true
+      fi
+
+      if [ "$valid" != true ]; then
+        ${pkgs.coreutils}/bin/rm -rf ${path}
+
+        ${pkgs.coreutils}/bin/install \
+          -d -o ${user} -g ${group} -m 2775 ${path}
+
+        gitAsUser clone --quiet --no-checkout ${repo} ${path}
+        gitAsUser -C ${path} checkout --quiet ${rev}
+      fi
+
+      ${pkgs.coreutils}/bin/chown -R ${user}:${group} ${path}
+
+      ${pkgs.findutils}/bin/find ${path} -type d \
+        -exec ${pkgs.coreutils}/bin/chmod 2775 {} +
+
+      ${pkgs.findutils}/bin/find ${path} -type f \
+        -exec ${pkgs.coreutils}/bin/chmod g+rw {} +
+    '';
+  };
 
   security.sudo.wheelNeedsPassword = true;
   security.sudo.execWheelOnly      = true;
