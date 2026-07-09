@@ -66,7 +66,7 @@ in
       group = "nixos-config";
       path = "/etc/nixos";
       repo = "https://github.com/FraFrieFa/nix-config";
-      rev = "2ca76d3f7f013eea8b066d7e03d713e36730ad45";
+      rev = "f9a55587357dfd5552fda07cf16c970e277f0340";
     in ''
       gitAsUser() {
         ${pkgs.util-linux}/bin/runuser -u ${user} -- \
