@@ -47,7 +47,32 @@
     '';
   };
 
-  programs.zsh.enable = true;
+  programs.zsh = {
+    enable = true;
+    enableCompletion = true;
+    autosuggestions.enable = true;
+    syntaxHighlighting.enable = true;
+
+    histSize = 10000;
+    histFile = "$HOME/.zsh_history";
+
+    setOptions = [
+      "AUTO_CD"
+      "HIST_IGNORE_ALL_DUPS"
+      "SHARE_HISTORY"
+    ];
+
+    shellAliases = {
+      ll = "ls -lah";
+      grep = "grep --color=auto";
+    };
+
+    promptInit = ''
+      autoload -U colors && colors
+      PROMPT='%F{cyan}%n@%m%f %F{blue}%~%f %# '
+    '';
+  };
+
   users.defaultUserShell = pkgs.zsh;
   users.users.root.shell = pkgs.bash;
 
@@ -73,13 +98,15 @@
 
       valid=false
 
-      if [ "$(${pkgs.coreutils}/bin/stat -c '%U:%G:%a' ${path} 2>/dev/null || true)" \
-           = "${user}:${group}:2775" ] &&
+      metadata="$(${pkgs.coreutils}/bin/stat -c '%U:%G:%a' ${path} 2>/dev/null || true)"
+      if { [ "$metadata" = "${user}:${group}:2755" ] ||
+           [ "$metadata" = "${user}:${group}:2775" ]; } &&
          origin="$(gitAsUser -C ${path} remote get-url origin 2>/dev/null)"; then
         case "$origin" in
           ${httpsRepo}|${httpsRepo}.git|${sshRepo}) valid=true ;;
         esac
       fi
+
 
       if [ "$valid" != true ]; then
         ${pkgs.coreutils}/bin/rm -rf ${path}
