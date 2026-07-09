@@ -1,5 +1,8 @@
 { config, pkgs, lib, ... }:
 let
+  repeat = config.local.keyboard.repeat;
+  repeatInterval = 1000 / repeat.rate;
+
   disableKWinTopLeftHotCorner = pkgs.writeShellScript "disable-kwin-top-left-hot-corner" ''
     ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 --file kwinrc --group ElectricBorders --key TopLeft None
     ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 --file kwinrc --group Effect-overview --key BorderActivate ""
@@ -11,8 +14,8 @@ in
   services.xserver = {
     enable     = true;
     xkb.layout = "de";
-    autoRepeatDelay = 180;
-    autoRepeatInterval = 20;
+    autoRepeatDelay = repeat.delay;
+    autoRepeatInterval = repeatInterval;
   };
 
   services.desktopManager.plasma6.enable = true;

@@ -8,7 +8,10 @@ let
   configRev  = "2ca76d3f7f013eea8b066d7e03d713e36730ad45";
 in
 {
-  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
+  imports = [
+    (modulesPath + "/installer/scan/not-detected.nix")
+    ./keyboard.nix
+  ];
 
   # /etc/nixos is owned root:nixos-config and group-writable so members of this
   # group can edit the config in place. Note this makes the group effectively

@@ -1,5 +1,7 @@
 { config, lib, pkgs, ... }:
 let
+  repeat = config.local.keyboard.repeat;
+
   autoRotateScript = pkgs.writeShellScript "auto-rotate" ''
     # Wait for sway to be ready
     sleep 2
@@ -356,8 +358,8 @@ in
 
     input type:keyboard {
         xkb_layout "de"
-        repeat_delay 250
-        repeat_rate  40
+        repeat_delay ${toString repeat.delay}
+        repeat_rate  ${toString repeat.rate}
     }
 
     input type:touchscreen {
