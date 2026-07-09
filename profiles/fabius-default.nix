@@ -28,5 +28,11 @@
     ];
   };
 
+  # Suppress zsh-newuser-install while keeping the system-wide zsh config.
+  # Type "f" creates this empty file if absent without truncating an existing one.
+  systemd.tmpfiles.rules = [
+    "f /home/fabius/.zshrc 0644 fabius users - -"
+  ];
+
   users.users.root.hashedPassword = "!";
 }
