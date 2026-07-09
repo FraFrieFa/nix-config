@@ -49,6 +49,7 @@
 
   programs.zsh.enable = true;
   users.defaultUserShell = pkgs.zsh;
+  users.users.root.shell = pkgs.bash;
 
   networking.networkmanager.enable = true;
 
