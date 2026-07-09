@@ -57,7 +57,7 @@ in
 
   networking.networkmanager.enable = true;
 
-  # Seed /etc/nixos with a pinned checkout of the config on first activation
+  # Ensure /etc/nixos is a writable checkout of the config repository.
   system.activationScripts.seedNixosConfig = {
     deps = [ "users" ];
 
@@ -65,8 +65,8 @@ in
       user = "fabius";
       group = "nixos-config";
       path = "/etc/nixos";
-      repo = "https://github.com/FraFrieFa/nix-config";
-      rev = "f9a55587357dfd5552fda07cf16c970e277f0340";
+      httpsRepo = "https://github.com/FraFrieFa/nix-config";
+      sshRepo = "git@github.com:FraFrieFa/nix-config.git";
     in ''
       gitAsUser() {
         ${pkgs.util-linux}/bin/runuser -u ${user} -- \
@@ -79,9 +79,10 @@ in
 
       if [ "$(${pkgs.coreutils}/bin/stat -c '%U:%G:%a' ${path} 2>/dev/null || true)" \
            = "${user}:${group}:2775" ] &&
-         origin="$(gitAsUser -C ${path} remote get-url origin 2>/dev/null)" &&
-         [ "$origin" = "${repo}" ]; then
-        valid=true
+         origin="$(gitAsUser -C ${path} remote get-url origin 2>/dev/null)"; then
+        case "$origin" in
+          ${httpsRepo}|${httpsRepo}.git|${sshRepo}) valid=true ;;
+        esac
       fi
 
       if [ "$valid" != true ]; then
@@ -90,9 +91,10 @@ in
         ${pkgs.coreutils}/bin/install \
           -d -o ${user} -g ${group} -m 2775 ${path}
 
-        gitAsUser clone --quiet --no-checkout ${repo} ${path}
-        gitAsUser -C ${path} checkout --quiet ${rev}
+        gitAsUser clone --quiet ${httpsRepo} ${path}
       fi
+
+      gitAsUser -C ${path} remote set-url origin ${sshRepo}
 
       ${pkgs.coreutils}/bin/chown -R ${user}:${group} ${path}
 
