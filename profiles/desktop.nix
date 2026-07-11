@@ -43,6 +43,8 @@ in
 
   services.fwupd.enable = false;
 
+  programs.kclock.enable = true;
+
   programs.firefox = {
     enable = true;
     policies.ExtensionSettings = {

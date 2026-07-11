@@ -27,7 +27,7 @@ in
     ../../profiles/fabius-default.nix
     ../../profiles/programming.nix
     ../../profiles/unfree.nix
-    ../../profiles/signaged_dev.nix
+    ../../profiles/screenpuck_dev.nix
   ];
 
   # ── Disk (Disko) ──────────────────────────────────────────────────────────────
