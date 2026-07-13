@@ -47,35 +47,6 @@
     '';
   };
 
-  programs.zsh = {
-    enable = true;
-    enableCompletion = true;
-    autosuggestions.enable = true;
-    syntaxHighlighting.enable = true;
-
-    histSize = 10000;
-    histFile = "$HOME/.zsh_history";
-
-    setOptions = [
-      "AUTO_CD"
-      "HIST_IGNORE_ALL_DUPS"
-      "SHARE_HISTORY"
-    ];
-
-    shellAliases = {
-      ll = "ls -lah";
-      grep = "grep --color=auto";
-    };
-
-    promptInit = ''
-      autoload -U colors && colors
-      PROMPT='%F{cyan}%n@%m%f %F{blue}%~%f %# '
-    '';
-  };
-
-  users.defaultUserShell = pkgs.zsh;
-  users.users.root.shell = pkgs.bash;
-
   networking.networkmanager.enable = true;
 
   # Ensure /etc/nixos is a writable checkout of the config repository.
