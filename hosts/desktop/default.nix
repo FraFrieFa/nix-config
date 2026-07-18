@@ -27,6 +27,8 @@
 
   hardware.graphics.enable = true;
   hardware.graphics.enable32Bit = true;
+  hardware.bluetooth.enable = true;
+  hardware.bluetooth.powerOnBoot = true;
   hardware.i2c.enable = true;
 
   services.xserver.videoDrivers = [ "nvidia" ];

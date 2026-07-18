@@ -39,7 +39,7 @@ in
     enable = true;
     user = "fabius";
   };
-  services.displayManager.defaultSession = "plasmax11";
+  services.displayManager.defaultSession = "plasma";
 
   services.fwupd.enable = false;
 
