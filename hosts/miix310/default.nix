@@ -27,8 +27,9 @@ in
     ../../profiles/fabius-default.nix
     ../../profiles/programming.nix
     ../../profiles/unfree.nix
-    ../../profiles/screenpuck_dev.nix
   ];
+
+  services.screenpuck-host.enable = true;
 
   # ── Disk (Disko) ──────────────────────────────────────────────────────────────
   # Whole-disk LUKS (FIDO2/YubiKey + passphrase) layout from profiles/disk.nix,

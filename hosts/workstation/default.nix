@@ -6,11 +6,12 @@
     ../../profiles/disk.nix
     ../../profiles/desktop.nix
     ../../profiles/programming.nix
-    ../../profiles/screenpuck_dev.nix
     ../../profiles/unfree.nix
   ];
 
   networking.hostName = "workstation";
+
+  services.screenpuck-host.enable = true;
 
   local.disk.full_disk = {
     id = "REPLACE-ME-workstation";

@@ -8,9 +8,16 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Private screenpuck repo over SSH. Fetched only when this input's locked rev
+    # changes (nix flake update screenpuck) — needs a YubiKey touch then, and NOT
+    # on unchanged rebuilds. Run rebuilds as your user so the key is reachable.
+    screenpuck = {
+      url = "git+ssh://git@github.com/FraFrieFa/screenpuck.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { nixpkgs, nixpkgs-unstable, disko, ... }:
+  outputs = { nixpkgs, nixpkgs-unstable, disko, screenpuck, ... }:
   let
     system = "x86_64-linux";
     pkgs = import nixpkgs { inherit system; };
@@ -27,6 +34,7 @@
       specialArgs = { inherit pkgs-unstable; };
       modules = [
         disko.nixosModules.disko
+        screenpuck.nixosModules.screenpuck-host
         ./hosts/desktop/default.nix
       ];
     };
@@ -36,6 +44,7 @@
       specialArgs = { inherit pkgs-unstable; };
       modules = [
         disko.nixosModules.disko
+        screenpuck.nixosModules.screenpuck-host
         ./hosts/workstation/default.nix
       ];
     };
@@ -50,6 +59,7 @@
       };
       modules = [
         disko.nixosModules.disko
+        screenpuck.nixosModules.screenpuck-host
         ./hosts/miix310/default.nix
       ];
     };
