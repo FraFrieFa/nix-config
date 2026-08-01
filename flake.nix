@@ -8,16 +8,13 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Private screenpuck repo over SSH. Fetched only when this input's locked rev
-    # changes (nix flake update screenpuck) — needs a YubiKey touch then, and NOT
-    # on unchanged rebuilds. Run rebuilds as your user so the key is reachable.
-    screenpuck = {
-      url = "git+ssh://git@github.com/FraFrieFa/screenpuck.git";
-      inputs.nixpkgs.follows = "nixpkgs";
+    nixos-hardware = {
+      url = "github:NixOS/nixos-hardware";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
   };
 
-  outputs = { nixpkgs, nixpkgs-unstable, disko, screenpuck, ... }:
+  outputs = { nixpkgs, nixpkgs-unstable, disko, nixos-hardware, ... }:
   let
     system = "x86_64-linux";
     pkgs = import nixpkgs { inherit system; };
@@ -34,7 +31,6 @@
       specialArgs = { inherit pkgs-unstable; };
       modules = [
         disko.nixosModules.disko
-        screenpuck.nixosModules.screenpuck-host
         ./hosts/desktop/default.nix
       ];
     };
@@ -44,7 +40,6 @@
       specialArgs = { inherit pkgs-unstable; };
       modules = [
         disko.nixosModules.disko
-        screenpuck.nixosModules.screenpuck-host
         ./hosts/workstation/default.nix
       ];
     };
@@ -59,8 +54,16 @@
       };
       modules = [
         disko.nixosModules.disko
-        screenpuck.nixosModules.screenpuck-host
         ./hosts/miix310/default.nix
+      ];
+    };
+
+    nixosConfigurations.vesper = nixpkgs-unstable.lib.nixosSystem {
+      system = "aarch64-linux";
+      modules = [
+        disko.nixosModules.disko
+        nixos-hardware.nixosModules.raspberry-pi-5
+        ./hosts/vesper/default.nix
       ];
     };
 

@@ -20,6 +20,26 @@
         "type": "github"
       }
     },
+    "nixos-hardware": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-unstable"
+        ]
+      },
+      "locked": {
+        "lastModified": 1785232496,
+        "narHash": "sha256-65EQYIRRpTdpH8lUiB6Mvo5uBkG60aBIzAJuALfx+O0=",
+        "owner": "NixOS",
+        "repo": "nixos-hardware",
+        "rev": "2e790b0a6be8ec2b76174ac0931b8ff11919ec98",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixos-hardware",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1785386831,
@@ -52,129 +72,12 @@
         "type": "github"
       }
     },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1781577229,
-        "narHash": "sha256-lrp67w8AulE9Ks53n27I45ADSzbOCn4H+CNW1Ck8B+8=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "567a49d1913ce81ac6e9582e3553dd90a955875f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
         "disko": "disko",
+        "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-unstable": "nixpkgs-unstable",
-        "screenpuck": "screenpuck"
-      }
-    },
-    "rpi-linux": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1782228128,
-        "narHash": "sha256-UuSk9LdxC/gzdottfBM7f+joOCB8ciBCnb1kqPKidLE=",
-        "owner": "raspberrypi",
-        "repo": "linux",
-        "rev": "cd1109f062a0c4cee3f4dfb03156888ac4e44949",
-        "type": "github"
-      },
-      "original": {
-        "owner": "raspberrypi",
-        "ref": "rpi-6.18.y",
-        "repo": "linux",
-        "type": "github"
-      }
-    },
-    "rpi-usb-gadget": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_2"
-      },
-      "locked": {
-        "lastModified": 1784671845,
-        "narHash": "sha256-Vwb2s9mtICdPKv8QArcaz/CE8zXnEA2q39S7cLVECUQ=",
-        "owner": "FraFrieFa",
-        "repo": "rpi-zero-usb-gadget",
-        "rev": "bac5871b33a5ad3b5d5e4985165600f415da1ec7",
-        "type": "github"
-      },
-      "original": {
-        "owner": "FraFrieFa",
-        "repo": "rpi-zero-usb-gadget",
-        "type": "github"
-      }
-    },
-    "rust-overlay": {
-      "inputs": {
-        "nixpkgs": [
-          "screenpuck",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1782184651,
-        "narHash": "sha256-4XHdXp3MRa++XiGkltJChCtdbCmSlNTwQRfWQOhqbRw=",
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "rev": "f59bc28dd0b89e9c0240d1b80195559fc79c2471",
-        "type": "github"
-      },
-      "original": {
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "type": "github"
-      }
-    },
-    "screenpuck": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "rpi-linux": "rpi-linux",
-        "rpi-usb-gadget": "rpi-usb-gadget",
-        "rust-overlay": "rust-overlay",
-        "treefmt-nix": "treefmt-nix"
-      },
-      "locked": {
-        "lastModified": 1785537298,
-        "narHash": "sha256-OKcSJzy5RZ+u21RVjyZaQN09+meizY6p5weWqSXKAUA=",
-        "ref": "refs/heads/main",
-        "rev": "a97d5fcf7251ebaee060c4a4969570f9e8ba27c9",
-        "revCount": 148,
-        "type": "git",
-        "url": "ssh://git@github.com/FraFrieFa/screenpuck.git"
-      },
-      "original": {
-        "type": "git",
-        "url": "ssh://git@github.com/FraFrieFa/screenpuck.git"
-      }
-    },
-    "treefmt-nix": {
-      "inputs": {
-        "nixpkgs": [
-          "screenpuck",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1780220602,
-        "narHash": "sha256-eynAfOmbmxJnkp7YewvCEbShNnnYJ9gLLqkzsYtBPeM=",
-        "owner": "numtide",
-        "repo": "treefmt-nix",
-        "rev": "db947814a175b7ca6ded66e21383d938df01c227",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "treefmt-nix",
-        "type": "github"
+        "nixpkgs-unstable": "nixpkgs-unstable"
       }
     }
   },

@@ -11,7 +11,8 @@
 
   networking.hostName = "workstation";
 
-  services.screenpuck-host.enable = true;
+  # Build and install the aarch64 Raspberry Pi system from this x86_64 host.
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
 
   local.disk.full_disk = {
     id = "REPLACE-ME-workstation";

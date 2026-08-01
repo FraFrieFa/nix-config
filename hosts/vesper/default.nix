@@ -1,0 +1,55 @@
+{ ... }:
+{
+  imports = [
+    ../../profiles/disk.nix
+  ];
+
+  networking.hostName = "vesper";
+  networking.useNetworkd = true;
+  systemd.network = {
+    enable = true;
+    networks."10-ethernet" = {
+      matchConfig.Name = "end0 eth0";
+      networkConfig.DHCP = "yes";
+    };
+  };
+  networking.firewall.enable = true;
+
+  local.disk.full_disk = {
+    id = "mmc-SN512_0x7cc51f60";
+    bootLayout = "raspberry-pi";
+    encryption = "none";
+    overProvisioning = "10%";
+  };
+
+  # Populate the freshly formatted boot partition with the official Raspberry
+  # Pi firmware, U-Boot, device trees, and config.txt on every activation.
+  hardware.raspberry-pi.firmware = {
+    enable = true;
+    path = "/boot";
+    uboot.enable = true;
+  };
+
+  time.timeZone = "Europe/Berlin";
+  console.keyMap = "de";
+
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    auto-optimise-store = true;
+  };
+
+  zramSwap = {
+    enable = true;
+    algorithm = "zstd";
+  };
+
+  users.users.fabius = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" ];
+  };
+  users.users.root.initialPassword = "nixos";
+
+  security.sudo.wheelNeedsPassword = true;
+
+  system.stateVersion = "26.05";
+}

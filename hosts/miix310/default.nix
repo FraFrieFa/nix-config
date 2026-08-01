@@ -29,8 +29,6 @@ in
     ../../profiles/unfree.nix
   ];
 
-  services.screenpuck-host.enable = true;
-
   # ── Disk (Disko) ──────────────────────────────────────────────────────────────
   # Whole-disk LUKS (FIDO2/YubiKey + passphrase) layout from profiles/disk.nix,
   # applied to the 58GB eMMC. by-id basename of /dev/mmcblk0.
@@ -127,7 +125,10 @@ in
         sshUser = "nixremote";
         sshKey = "/root/.ssh/nixremote-workstation";
         protocol = "ssh-ng";
-        system = "x86_64-linux";
+        systems = [
+          "x86_64-linux"
+          "aarch64-linux"
+        ];
         maxJobs = 8;
         speedFactor = 4;
         supportedFeatures = [

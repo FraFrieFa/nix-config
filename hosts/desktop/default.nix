@@ -13,8 +13,6 @@
 
   networking.hostName = "desktop";
 
-  services.screenpuck-host.enable = true;
-
   local.disk.full_disk = {
     id = "nvme-Samsung_SSD_990_PRO_2TB_S7DNNJ0X226913W";
     overProvisioning = "400G";
