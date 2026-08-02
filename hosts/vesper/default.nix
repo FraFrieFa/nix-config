@@ -1,4 +1,4 @@
-{ ... }:
+{ lib, ... }:
 {
   imports = [
     ../../profiles/disk.nix
@@ -18,7 +18,6 @@
   local.disk.full_disk = {
     id = "mmc-SN512_0x7cc51f60";
     bootLayout = "raspberry-pi";
-    encryption = "none";
     overProvisioning = "10%";
   };
 
@@ -29,6 +28,8 @@
     path = "/boot";
     uboot.enable = true;
   };
+
+  boot.initrd.systemd.tpm2.enable = lib.mkForce false;
 
   time.timeZone = "Europe/Berlin";
   console.keyMap = "de";
