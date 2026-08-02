@@ -2,10 +2,6 @@
 let
   disk = config.local.disk.full_disk;
 
-  isPercentage = lib.hasSuffix "%" disk.overProvisioning;
-  overProvisioningPercent =
-    builtins.fromJSON (lib.removeSuffix "%" disk.overProvisioning);
-
   rootFilesystem = {
     type = "filesystem";
     format = "ext4";
@@ -35,9 +31,7 @@ let
     name = "cryptroot";
     label = "cryptroot";
     content = encryptedRoot;
-  } // lib.optionalAttrs isPercentage {
-    end = "${toString (100 - overProvisioningPercent)}%";
-  } // lib.optionalAttrs (!isPercentage && disk.overProvisioning != "0") {
+  } // lib.optionalAttrs (disk.overProvisioning != "0") {
     end = "-${disk.overProvisioning}";
   } // lib.optionalAttrs (disk.overProvisioning == "0") {
     size = "100%";
@@ -88,10 +82,9 @@ in
       type = lib.types.oneOf [
         (lib.types.enum [ "0" ])
         (lib.types.strMatching "[0-9]+[KMGTP]")
-        (lib.types.strMatching "([1-9]|[1-9][0-9])%")
       ];
-      description = "Space or percentage left unpartitioned at the end of the disk.";
-      example = "20%";
+      description = "Fixed-size space left unpartitioned at the end of the disk.";
+      example = "20G";
     };
   };
 

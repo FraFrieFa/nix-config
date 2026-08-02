@@ -18,7 +18,7 @@
   local.disk.full_disk = {
     id = "mmc-SN512_0x7cc51f60";
     bootLayout = "raspberry-pi";
-    overProvisioning = "10%";
+    overProvisioning = "48G";
   };
 
   # Populate the freshly formatted boot partition with the official Raspberry
