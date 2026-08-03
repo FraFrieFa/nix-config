@@ -1,10 +1,14 @@
 { lib, ... }:
 {
   imports = [
+    ../../profiles/base.nix
+    ../../profiles/fabius-default.nix
     ../../profiles/disk.nix
+    ../../profiles/programming.nix
   ];
 
   networking.hostName = "vesper";
+  networking.networkmanager.enable = lib.mkForce false;
   networking.useNetworkd = true;
   systemd.network = {
     enable = true;
@@ -30,27 +34,6 @@
   };
 
   boot.initrd.systemd.tpm2.enable = lib.mkForce false;
-
-  time.timeZone = "Europe/Berlin";
-  console.keyMap = "de";
-
-  nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
-    auto-optimise-store = true;
-  };
-
-  zramSwap = {
-    enable = true;
-    algorithm = "zstd";
-  };
-
-  users.users.fabius = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" ];
-  };
-  users.users.root.initialPassword = "nixos";
-
-  security.sudo.wheelNeedsPassword = true;
 
   system.stateVersion = "26.05";
 }

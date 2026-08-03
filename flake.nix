@@ -17,14 +17,14 @@
   outputs = { nixpkgs, nixpkgs-unstable, disko, nixos-hardware, ... }:
   let
     system = "x86_64-linux";
-    pkgs = import nixpkgs { inherit system; };
-    pkgs-unstable = import nixpkgs-unstable {
+    pkgs-unstable-for = system: import nixpkgs-unstable {
       inherit system;
-      config.allowUnfreePredicate = pkg: builtins.elem (pkgs.lib.getName pkg) [
+      config.allowUnfreePredicate = pkg: builtins.elem (nixpkgs.lib.getName pkg) [
         "claude-code"
         "teamspeak6-client"
       ];
     };
+    pkgs-unstable = pkgs-unstable-for system;
   in {
     nixosConfigurations.desktop = nixpkgs.lib.nixosSystem {
       inherit system;
@@ -60,6 +60,9 @@
 
     nixosConfigurations.vesper = nixpkgs-unstable.lib.nixosSystem {
       system = "aarch64-linux";
+      specialArgs = {
+        pkgs-unstable = pkgs-unstable-for "aarch64-linux";
+      };
       modules = [
         disko.nixosModules.disko
         nixos-hardware.nixosModules.raspberry-pi-5

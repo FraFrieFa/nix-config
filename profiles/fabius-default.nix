@@ -1,6 +1,6 @@
 { pkgs, ... }:
 {
-  users.groups.nixos-config = {};
+  local.nixosConfig.owner = "fabius";
 
   users.users.fabius = {
     isNormalUser = true;
