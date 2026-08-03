@@ -111,8 +111,6 @@ in
       auto-optimise-store   = true;
     };
 
-    boot.kernelPackages = pkgs.linuxPackages;
-
     zramSwap = {
       enable    = true;
       algorithm = "zstd";
