@@ -60,8 +60,8 @@
     enable = true;
     openFirewall = true;
     settings = {
-      PasswordAuthentication = true;
-      KbdInteractiveAuthentication = true;
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
       PermitRootLogin = "no";
     };
   };
@@ -71,6 +71,9 @@
     description = "Fabius";
     extraGroups = [ "wheel" ];
     initialPassword = "nixos";
+    openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEo03wEt6WG7tfUdEsPVC9Zowg6Wizx6HJsDkki/dcYe fabius@desktop-to-10.55.0.2"
+    ];
   };
   users.users.root.initialPassword = "nixos";
 
