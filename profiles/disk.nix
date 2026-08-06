@@ -28,9 +28,9 @@ let
 
   rootPartition = {
     priority = 2;
-    name = "cryptroot";
-    label = "cryptroot";
-    content = encryptedRoot;
+    name = if disk.encryption == "luks" then "cryptroot" else "root";
+    label = if disk.encryption == "luks" then "cryptroot" else "root";
+    content = if disk.encryption == "luks" then encryptedRoot else rootFilesystem;
   } // lib.optionalAttrs (disk.overProvisioning != "0") {
     end = "-${disk.overProvisioning}";
   } // lib.optionalAttrs (disk.overProvisioning == "0") {
@@ -54,7 +54,7 @@ let
   };
 
   partitions = {
-    cryptroot = rootPartition;
+    ${if disk.encryption == "luks" then "cryptroot" else "root"} = rootPartition;
   } // (if isRaspberryPi then {
     firmware = bootPartition;
   } else {
@@ -76,6 +76,12 @@ in
       type = lib.types.enum [ "uefi" "raspberry-pi" ];
       default = "uefi";
       description = "Boot partition and loader layout used by this host.";
+    };
+
+    encryption = lib.mkOption {
+      type = lib.types.enum [ "luks" "none" ];
+      default = "luks";
+      description = "Encryption used for the root filesystem.";
     };
 
     overProvisioning = lib.mkOption {
@@ -100,13 +106,13 @@ in
       };
     }
 
-    {
+    (lib.mkIf (disk.encryption == "luks") {
       boot.initrd.systemd.enable = true;
       boot.initrd.systemd.fido2.enable = true;
       boot.initrd.systemd.storePaths = [
         "${pkgs.pcsclite.lib}/lib/libpcsclite_real.so.1"
       ];
-    }
+    })
 
     (lib.mkIf (disk.bootLayout == "uefi") {
       boot.loader.systemd-boot.enable = true;
