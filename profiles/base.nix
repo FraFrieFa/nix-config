@@ -136,7 +136,7 @@ in
       "net.core.bpf_jit_harden"         = 2;
       "net.ipv4.conf.all.rp_filter"     = 1;
       "net.ipv4.conf.default.rp_filter" = 1;
-      "vm.mmap_rnd_bits"                 = 32;
+      "vm.mmap_rnd_bits"                 = if pkgs.stdenv.hostPlatform.isAarch64 then 24 else 32;
       "vm.mmap_rnd_compat_bits"          = 16;
     };
 
