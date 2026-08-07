@@ -13,7 +13,6 @@ let
     type = "luks";
     name = "cryptroot";
     enrollFido2 = true;
-    extraFido2EnrollArgs = [ "--fido2-with-client-pin=no" ];
     askPassword = true;
     settings = {
       allowDiscards = true;
@@ -109,9 +108,6 @@ in
     (lib.mkIf (disk.encryption == "luks") {
       boot.initrd.systemd.enable = true;
       boot.initrd.systemd.fido2.enable = true;
-      boot.initrd.systemd.storePaths = [
-        "${pkgs.pcsclite.lib}/lib/libpcsclite_real.so.1"
-      ];
     })
 
     (lib.mkIf (disk.bootLayout == "uefi") {
