@@ -54,7 +54,20 @@
     disable_fw_kms_setup = lib.mkForce null;
     display_auto_detect = lib.mkForce null;
     dtoverlay = lib.mkForce null;
-    dtparam = lib.mkForce null;
+    # The stock Pi 5 DTB already ships a complete fan curve: a `pwm-fan` node
+    # (`cooling_fan`) plus a `cpu-thermal` zone whose four active trips map onto
+    # fan states 1-4 (50/60/67.5/75 °C -> PWM 75/125/175/250 of 255, 5 °C
+    # hysteresis, critical shutdown at 110 °C). The kernel thermal subsystem
+    # drives it with no daemon; the node just ships `status = "disabled"` and the
+    # firmware flips it to "okay" when it sees this dtparam.
+    #
+    # Nulling `dtparam` wholesale above (to drop nixos-hardware's `audio=on`
+    # alongside the `dtoverlay` wipe that forces legacy firmware HDMI output)
+    # silently took `cooling_fan` with it, leaving the fan dead and no cooling
+    # device in /sys/class/thermal. mkForce stays so the default list is still
+    # overridden outright rather than merged. `fan_temp0..3`, `_hyst` and
+    # `_speed` overrides can retune the curve here if it turns out too loud.
+    dtparam = lib.mkForce [ "cooling_fan=on" ];
     max_framebuffers = lib.mkForce null;
   };
   hardware.enableRedistributableFirmware = true;
@@ -74,9 +87,13 @@
   # git/htop/jq/pciutils/ripgrep/usbutils come from the base primary-user set.
   # cryptsetup here is only for interactive use; the initrd LUKS stack pulls in
   # its own copy independently of this list.
+  #
+  # lm_sensors is purely for reading back CPU temperature and fan RPM; the fan
+  # control loop itself lives in the kernel (see the cooling_fan dtparam above).
   local.primaryUser.extraPackages = with pkgs; [
     cryptsetup
     libraspberrypi
+    lm_sensors
   ];
 
   services.openssh = {
