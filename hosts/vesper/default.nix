@@ -5,14 +5,7 @@
   ];
 
   networking.hostName = "vesper";
-  networking.useNetworkd = true;
-  systemd.network = {
-    enable = true;
-    networks."10-ethernet" = {
-      matchConfig.Name = "end0 eth0";
-      networkConfig.DHCP = "yes";
-    };
-  };
+  networking.networkmanager.enable = true;
   networking.firewall.enable = true;
   networking.firewall.allowedTCPPorts = [ 22 ];
 
@@ -30,6 +23,7 @@
     path = "/boot";
     uboot.enable = true;
   };
+  hardware.enableRedistributableFirmware = true;
 
   boot.initrd.systemd.tpm2.enable = lib.mkForce false;
   boot.initrd.kernelModules = [ "dm_mod" "mmc_block" ];
