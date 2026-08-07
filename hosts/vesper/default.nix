@@ -89,7 +89,7 @@
 
   users.users.fabius = {
     openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEo03wEt6WG7tfUdEsPVC9Zowg6Wizx6HJsDkki/dcYe fabius@desktop-to-10.55.0.2"
+      "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIDPgm7K7t41fVBh5Jajl4+vPyJO7jA45U8soik3sgL4kAAAACnNzaDpmYWJpdXM= fabius yubikey ssh"
     ];
   };
 
