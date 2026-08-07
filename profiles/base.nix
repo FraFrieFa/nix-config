@@ -1,6 +1,7 @@
 { config, pkgs, lib, modulesPath, ... }:
 let
   nixosConfig = config.local.nixosConfig;
+  primaryUser = config.local.primaryUser;
 in
 {
   imports = [
@@ -8,26 +9,94 @@ in
     ./keyboard.nix
   ];
 
-  options.local.nixosConfig = {
-    owner = lib.mkOption {
+  # The single human account on this machine. Profiles and hosts extend it
+  # through the extra* list options rather than naming the user directly, so
+  # nothing outside profiles/fabius-default.nix hardcodes a username.
+  options.local.primaryUser = {
+    name = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "User that owns and clones the /etc/nixos config checkout.";
+      description = "Login name of the machine's primary (and only) human user.";
     };
 
+    description = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "GECOS description for the primary user.";
+    };
+
+    extraGroups = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      description = "Groups to add on top of the base set.";
+    };
+
+    extraPackages = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = [];
+      description = ''
+        Packages installed into the primary user's profile. This is the only
+        supported way to install packages; environment.systemPackages is
+        deliberately left unused across this config.
+      '';
+    };
+
+    authorizedKeys = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      description = "SSH public keys accepted for the primary user.";
+    };
+  };
+
+  options.local.nixosConfig = {
+    unfreePackages = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      description = "Package names allowed despite an unfree license.";
+    };
   };
 
   config = {
     assertions = [
       {
-        assertion = nixosConfig.owner != null;
-        message = "local.nixosConfig.owner must be set by hosts importing profiles/base.nix.";
+        assertion = primaryUser.name != null;
+        message = "local.primaryUser.name must be set by hosts importing profiles/base.nix.";
       }
     ];
+
+    users.users.${primaryUser.name} = {
+      isNormalUser = true;
+      inherit (primaryUser) description;
+      extraGroups = [
+        "wheel"
+        "networkmanager"
+        "video"
+        "audio"
+        "nixos-config"
+        "dialout"
+      ] ++ primaryUser.extraGroups;
+      packages = (with pkgs; [
+        curl
+        fd
+        git
+        htop
+        jq
+        pciutils
+        ripgrep
+        unzip
+        usbutils
+        vim
+        wget
+      ]) ++ primaryUser.extraPackages;
+      openssh.authorizedKeys.keys = primaryUser.authorizedKeys;
+    };
 
     # Members can edit /etc/nixos in place. This is root-equivalent because config
     # changes are applied by root during rebuilds; only trusted users belong here.
     users.groups.nixos-config = {};
+
+    nixpkgs.config.allowUnfreePredicate = pkg:
+      builtins.elem (lib.getName pkg) nixosConfig.unfreePackages;
 
     programs.git = {
       enable = true;
@@ -71,7 +140,7 @@ in
       deps = [ "users" ];
 
       text = let
-        user = nixosConfig.owner;
+        user = primaryUser.name;
         group = "nixos-config";
         path = "/etc/nixos";
         repo = "https://github.com/FraFrieFa/nix-config";
@@ -142,6 +211,18 @@ in
 
     security.protectKernelImage      = true;
     security.forcePageTableIsolation = true;
+
+    # YubiKey / FIDO2. The udev rules are what make the token reachable as a
+    # normal user; without them /dev/hidraw* stays root-only and ssh-keygen
+    # -t ed25519-sk fails even with libfido2 present. Rules apply on device
+    # add, so an already-inserted key must be replugged after a switch.
+    local.primaryUser.extraPackages = with pkgs; [
+      libfido2
+      yubikey-manager
+    ];
+
+    services.udev.packages = [ pkgs.yubikey-personalization ];
+    services.pcscd.enable = true;
 
     security.pam.u2f = {
       enable       = true;

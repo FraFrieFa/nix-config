@@ -4,12 +4,11 @@
     ../../profiles/base.nix
     ../../profiles/disk.nix
     ../../profiles/fabius-default.nix
+    ../../profiles/programming.nix
+    ../../profiles/claude.nix
   ];
 
   networking.hostName = "vesper";
-  networking.networkmanager.enable = true;
-  networking.firewall.enable = true;
-  networking.firewall.allowedTCPPorts = [ 22 ];
 
   local.disk.full_disk = {
     id = "mmc-SN512_0x7cc51f60";
@@ -17,13 +16,12 @@
     overProvisioning = "48G";
   };
 
-  # Populate the freshly formatted boot partition with the official Raspberry
-  # Pi firmware, U-Boot, device trees, and config.txt on every activation.
   hardware.raspberry-pi.firmware = {
     enable = true;
     path = "/boot";
     uboot.enable = true;
   };
+  
   hardware.raspberry-pi.configtxt.settings.all = {
     avoid_warnings = true;
     "hdmi_group:0" = 1;
@@ -51,30 +49,15 @@
   ];
 
   boot.initrd.systemd.tpm2.enable = lib.mkForce false;
-  boot.initrd.systemd.fido2.enable = true;
   boot.blacklistedKernelModules = [ "rp1_pio" ];
   boot.initrd.kernelModules = [ "dm_mod" "mmc_block" ];
 
-  time.timeZone = "Europe/Berlin";
-  i18n.defaultLocale = "en_US.UTF-8";
-  console.keyMap = "de";
-
-  nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
-    auto-optimise-store = true;
-    trusted-users = [ "@wheel" ];
-  };
-
-  environment.systemPackages = with pkgs; [
+  # git/htop/jq/pciutils/ripgrep/usbutils come from the base primary-user set.
+  # cryptsetup here is only for interactive use; the initrd LUKS stack pulls in
+  # its own copy independently of this list.
+  local.primaryUser.extraPackages = with pkgs; [
     cryptsetup
-    git
-    htop
-    jq
-    kmod
-    pciutils
-    ripgrep
-    usbutils
-    vim
+    libraspberrypi
   ];
 
   services.openssh = {
@@ -87,13 +70,9 @@
     };
   };
 
-  users.users.fabius = {
-    openssh.authorizedKeys.keys = [
-      "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIDPgm7K7t41fVBh5Jajl4+vPyJO7jA45U8soik3sgL4kAAAACnNzaDpmYWJpdXM= fabius yubikey ssh"
-    ];
-  };
-
-  security.sudo.wheelNeedsPassword = true;
+  local.primaryUser.authorizedKeys = [
+    "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIDPgm7K7t41fVBh5Jajl4+vPyJO7jA45U8soik3sgL4kAAAACnNzaDpmYWJpdXM= fabius yubikey ssh"
+  ];
 
   zramSwap = {
     enable = true;

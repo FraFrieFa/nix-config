@@ -1,31 +1,8 @@
-{ pkgs, ... }:
+{ ... }:
 {
-  local.nixosConfig.owner = "fabius";
-
-  users.users.fabius = {
-    isNormalUser = true;
+  local.primaryUser = {
+    name = "fabius";
     description = "Fabius";
-    extraGroups = [
-      "wheel"
-      "networkmanager"
-      "video"
-      "audio"
-      "nixos-config"
-      "dialout"
-    ];
-    packages = with pkgs; [
-      curl
-      fd
-      git
-      htop
-      jq
-      pciutils
-      ripgrep
-      unzip
-      usbutils
-      vim
-      wget
-    ];
   };
 
   users.users.root.hashedPassword = "!";

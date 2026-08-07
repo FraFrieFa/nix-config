@@ -21,7 +21,6 @@
       inherit system;
       config.allowUnfreePredicate = pkg: builtins.elem (nixpkgs.lib.getName pkg) [
         "claude-code"
-        "teamspeak6-client"
       ];
     };
     pkgs-unstable = pkgs-unstable-for system;
@@ -46,12 +45,7 @@
 
     nixosConfigurations.miix310 = nixpkgs.lib.nixosSystem {
       inherit system;
-      specialArgs = {
-        pkgs-unstable = import nixpkgs-unstable {
-          inherit system;
-          config.allowUnfree = true;
-        };
-      };
+      specialArgs = { inherit pkgs-unstable; };
       modules = [
         disko.nixosModules.disko
         ./hosts/miix310/default.nix

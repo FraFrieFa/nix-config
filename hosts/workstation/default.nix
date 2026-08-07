@@ -6,6 +6,7 @@
     ../../profiles/disk.nix
     ../../profiles/desktop.nix
     ../../profiles/programming.nix
+    ../../profiles/claude.nix
     ../../profiles/unfree.nix
   ];
 
@@ -19,7 +20,7 @@
     overProvisioning = "100G";
   };
 
-  users.users.fabius.packages = with pkgs; [
+  local.primaryUser.extraPackages = with pkgs; [
     screen
     rpiboot
     picocom

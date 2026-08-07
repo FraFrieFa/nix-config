@@ -37,7 +37,7 @@ in
 
   services.displayManager.autoLogin = {
     enable = true;
-    user = "fabius";
+    user = config.local.primaryUser.name;
   };
   services.displayManager.defaultSession = "plasmax11";
 

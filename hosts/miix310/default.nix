@@ -26,7 +26,7 @@ in
     ../../profiles/disk.nix
     ../../profiles/fabius-default.nix
     ../../profiles/programming.nix
-    ../../profiles/unfree.nix
+    ../../profiles/claude.nix
   ];
 
   # ── Disk (Disko) ──────────────────────────────────────────────────────────────
@@ -265,7 +265,7 @@ in
       terminal.vt = 1;
       default_session = {
         command = "${pkgs.dbus}/bin/dbus-run-session ${pkgs.sway}/bin/sway";
-        user = "fabius";
+        user = config.local.primaryUser.name;
       };
     };
   };
@@ -477,13 +477,12 @@ in
   services.openssh.enable = lib.mkForce false;
 
   # ── User extensions ───────────────────────────────────────────────────────────
-  users.users.fabius.extraGroups = lib.mkAfter [ "input" "video" ];
-  users.users.fabius.packages = with pkgs; [
+  local.primaryUser.extraGroups = lib.mkAfter [ "input" "video" ];
+  local.primaryUser.extraPackages = with pkgs; [
     firefox
     networkmanagerapplet
     playerctl
   ];
 
-  nixpkgs.config.allowUnfree = true;
   system.stateVersion = "26.05";
 }

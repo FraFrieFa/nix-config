@@ -7,6 +7,7 @@
     ../../profiles/desktop.nix
     ../../profiles/gaming.nix
     ../../profiles/programming.nix
+    ../../profiles/claude.nix
     ../../profiles/unfree.nix
   ];
 
@@ -17,10 +18,8 @@
     overProvisioning = "400G";
   };
 
-  users.users.fabius.packages = with pkgs; [
+  local.primaryUser.extraPackages = with pkgs; [
     ddcutil
-    libfido2
-    yubikey-manager
   ];
 
   hardware.graphics.enable = true;

@@ -1,9 +1,10 @@
-{ pkgs, pkgs-unstable, ... }:
+{ config, pkgs, pkgs-unstable, ... }:
 let
   pythonWithBrowserAutomation = pkgs.python3.withPackages (ps: with ps; [
     selenium
   ]);
   toml = pkgs.formats.toml {};
+  playwrightUserDataDir = "/tmp/playwright-mcp-${config.local.primaryUser.name}";
 in
 {
   environment.variables = {
@@ -14,11 +15,11 @@ in
   environment.etc."codex/managed_config.toml".source = toml.generate "codex-managed-config.toml" {
     mcp_servers.playwright = {
       command = "${pkgs.playwright-mcp}/bin/playwright-mcp";
-      args = [ "--user-data-dir" "/tmp/playwright-mcp-fabius" ];
+      args = [ "--user-data-dir" playwrightUserDataDir ];
     };
   };
 
-  users.users.fabius.packages = with pkgs; [
+  local.primaryUser.extraPackages = with pkgs; [
     pythonWithBrowserAutomation
     gcc
     geckodriver
