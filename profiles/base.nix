@@ -106,9 +106,14 @@ in
     time.timeZone = "Europe/Berlin";
     i18n.defaultLocale = "en_US.UTF-8";
 
+    # The kernel console maps at most 512 glyphs, so a full Nerd Font is not
+    # possible here. Cozette is the prettiest option that still ships the
+    # Powerline range (U+E0A0-U+E0B0) in its console PSF; Spleen's packaged
+    # psfu drops it. Only 6x13 and 12x26 exist -- 6x13 to keep the console
+    # small, since ter-v28b was a 14x28 bold cell.
     console = {
-      packages = [ pkgs.terminus_font ];
-      font     = "ter-v28b";
+      packages = [ pkgs.cozette ];
+      font     = "cozette6x13";
       keyMap = "de";
     };
 
@@ -152,21 +157,23 @@ in
               ${pkgs.git}/bin/git "$@"
         }
 
+        # NOTE: activation snippets are concatenated into one script, so a bare
+        # `exit` here would abort activation for every snippet ordered after
+        # this one -- including udevd. Keep the clone inside the else branch.
         if [ -e ${path} ]; then
           echo "info: ${path} exists; skipping config repo clone"
-          exit 0
+        else
+          ${pkgs.coreutils}/bin/install \
+            -d -o ${user} -g ${group} -m 2775 ${path}
+
+          gitAsUser clone --quiet ${repo} ${path}
+
+          ${pkgs.coreutils}/bin/chown -R ${user}:${group} ${path}
+
+          ${pkgs.coreutils}/bin/chmod -R g+rwX ${path}
+          ${pkgs.findutils}/bin/find ${path} -type d \
+            -exec ${pkgs.coreutils}/bin/chmod g+s {} +
         fi
-
-        ${pkgs.coreutils}/bin/install \
-          -d -o ${user} -g ${group} -m 2775 ${path}
-
-        gitAsUser clone --quiet ${repo} ${path}
-
-        ${pkgs.coreutils}/bin/chown -R ${user}:${group} ${path}
-
-        ${pkgs.coreutils}/bin/chmod -R g+rwX ${path}
-        ${pkgs.findutils}/bin/find ${path} -type d \
-          -exec ${pkgs.coreutils}/bin/chmod g+s {} +
       '';
     };
 

@@ -6,9 +6,14 @@
     ../../profiles/fabius-default.nix
     ../../profiles/programming.nix
     ../../profiles/claude.nix
+    ../../profiles/screenpuck_dev.nix
   ];
 
   networking.hostName = "vesper";
+
+  # No NAT relay here yet: vesper's uplink is end0/wld0, not the workstation's
+  # enp0s31f6. Set this once it should hand internet to an attached gadget Pi.
+  local.screenpuck.externalInterface = null;
 
   local.disk.full_disk = {
     id = "mmc-SN512_0x7cc51f60";
@@ -19,7 +24,21 @@
   hardware.raspberry-pi.firmware = {
     enable = true;
     path = "/boot";
-    uboot.enable = true;
+    uboot = {
+      enable = true;
+      # rpi_arm64_defconfig targets the Pi 4 and builds no driver that binds the
+      # Pi 5's USB. On this board every port hangs off the RP1 southbridge behind
+      # PCIe and is described in the DTB as bare `compatible = "snps,dwc3"`;
+      # stock U-Boot enumerates the PCIe link fine but has nothing to attach, so
+      # `usb start` reports "no USB controller found". xhci-dwc3 is the only
+      # driver in-tree matching bare "snps,dwc3" (dwc3-generic matches vendor
+      # glue compatibles only, none of which the Pi 5 uses).
+      package = pkgs.ubootRaspberryPiAarch64.override {
+        extraConfig = ''
+          CONFIG_USB_XHCI_DWC3=y
+        '';
+      };
+    };
   };
   
   hardware.raspberry-pi.configtxt.settings.all = {
