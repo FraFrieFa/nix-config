@@ -24,21 +24,31 @@
   hardware.raspberry-pi.firmware = {
     enable = true;
     path = "/boot";
-    uboot = {
-      enable = true;
-      # rpi_arm64_defconfig targets the Pi 4 and builds no driver that binds the
-      # Pi 5's USB. On this board every port hangs off the RP1 southbridge behind
-      # PCIe and is described in the DTB as bare `compatible = "snps,dwc3"`;
-      # stock U-Boot enumerates the PCIe link fine but has nothing to attach, so
-      # `usb start` reports "no USB controller found". xhci-dwc3 is the only
-      # driver in-tree matching bare "snps,dwc3" (dwc3-generic matches vendor
-      # glue compatibles only, none of which the Pi 5 uses).
-      package = pkgs.ubootRaspberryPiAarch64.override {
-        extraConfig = ''
-          CONFIG_USB_XHCI_DWC3=y
-        '';
-      };
-    };
+    uboot.enable = true;
+
+    # DISABLED -- this override made the board unbootable. It replaces the
+    # second-stage bootloader on the FAT partition with a rebuild of
+    # rpi_arm64_defconfig plus the fragment below; the resulting u-boot.bin does
+    # not come up on a Pi 5, so nothing downstream ever executes. Stock U-Boot
+    # boots fine and only fails at `usb start` ("no USB controller found"), so
+    # the cost of leaving this off is USB in U-Boot, not the system.
+    #
+    # The reasoning was sound as far as it went: Pi 5 USB hangs off the RP1
+    # southbridge behind PCIe and is described in the DTB as bare
+    # `compatible = "snps,dwc3"`, and xhci-dwc3 is the only in-tree driver
+    # matching that (dwc3-generic matches vendor glue compatibles only, none of
+    # which the Pi 5 uses). CONFIG_USB_XHCI_DWC3 alone evidently isn't enough to
+    # produce a working image -- re-enabling this needs a build verified on the
+    # board (serial console / recoverable SD) before it goes anywhere near /boot.
+    #
+    # uboot = {
+    #   enable = true;
+    #   package = pkgs.ubootRaspberryPiAarch64.override {
+    #     extraConfig = ''
+    #       CONFIG_USB_XHCI_DWC3=y
+    #     '';
+    #   };
+    # };
   };
   
   hardware.raspberry-pi.configtxt.settings.all = {

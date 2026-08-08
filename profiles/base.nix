@@ -106,14 +106,9 @@ in
     time.timeZone = "Europe/Berlin";
     i18n.defaultLocale = "en_US.UTF-8";
 
-    # The kernel console maps at most 512 glyphs, so a full Nerd Font is not
-    # possible here. Cozette is the prettiest option that still ships the
-    # Powerline range (U+E0A0-U+E0B0) in its console PSF; Spleen's packaged
-    # psfu drops it. Only 6x13 and 12x26 exist -- 6x13 to keep the console
-    # small, since ter-v28b was a 14x28 bold cell.
     console = {
-      packages = [ pkgs.cozette ];
-      font     = "cozette6x13";
+      packages = [ pkgs.terminus_font ];
+      font     = "ter-v24n";
       keyMap = "de";
     };
 
