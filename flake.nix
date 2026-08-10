@@ -64,5 +64,17 @@
       ];
     };
 
+    nixosConfigurations.solace = nixpkgs-unstable.lib.nixosSystem {
+      system = "aarch64-linux";
+      specialArgs = {
+        pkgs-unstable = pkgs-unstable-for "aarch64-linux";
+      };
+      modules = [
+        disko.nixosModules.disko
+        nixos-hardware.nixosModules.raspberry-pi-4
+        ./hosts/solace/default.nix
+      ];
+    };
+
   };
 }
