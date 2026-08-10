@@ -103,6 +103,8 @@ in
       config.safe.directory = "/etc/nixos";
     };
 
+    programs.ssh.startAgent = true;
+
     time.timeZone = "Europe/Berlin";
     i18n.defaultLocale = "en_US.UTF-8";
 
