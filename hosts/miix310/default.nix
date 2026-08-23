@@ -26,6 +26,7 @@ in
     ../../profiles/disk.nix
     ../../profiles/fabius-default.nix
     ../../profiles/programming.nix
+    ../../profiles/usb_hub_dev.nix
     ../../profiles/claude.nix
   ];
 
@@ -163,6 +164,9 @@ in
   # ── Thermal management ────────────────────────────────────────────────────────
   services.thermald.enable = true;
 
+  # Keep the low-memory tablet responsive under memory pressure.
+  services.earlyoom.enable = true;
+
   # ── DNS ───────────────────────────────────────────────────────────────────────
   services.resolved.enable = true;
   networking.networkmanager.dns = "systemd-resolved";
@@ -277,7 +281,7 @@ in
     height   = 36;
     modules-left   = [ "sway/workspaces" "sway/mode" ];
     modules-center = [ "clock" ];
-    modules-right  = [ "battery" "backlight" "pulseaudio" "network" ];
+    modules-right  = [ "battery" "memory" "disk" "backlight" "pulseaudio" "network" ];
 
     "sway/workspaces" = {
       disable-scroll = true;
@@ -295,9 +299,22 @@ in
       tooltip         = false;
     };
 
+    memory = {
+      format = "  {avail:0.1f}G free";
+      interval = 5;
+      tooltip = false;
+    };
+
+    disk = {
+      format = "  {free} free";
+      interval = 30;
+      path = "/";
+      tooltip = false;
+    };
+
     backlight = {
       device         = "intel_backlight";
-      format         = "  {percent}%";
+      format         = "☀  {percent}%";
       on-scroll-up   = "${pkgs.brightnessctl}/bin/brightnessctl set 5%+";
       on-scroll-down = "${pkgs.brightnessctl}/bin/brightnessctl set 5%-";
       tooltip        = false;
@@ -338,7 +355,7 @@ in
     #workspaces button.focused, #workspaces button.active {
       color: #cba6f7;
     }
-    #clock, #battery, #backlight, #pulseaudio, #network, #mode {
+    #clock, #battery, #memory, #disk, #backlight, #pulseaudio, #network, #mode {
       padding: 0 12px;
     }
     #battery.warning  { color: #fab387; }
@@ -475,6 +492,7 @@ in
   # ── SSH ───────────────────────────────────────────────────────────────────────
   # The miix only needs outbound SSH to use workstation as a remote builder.
   services.openssh.enable = lib.mkForce false;
+  services.printing.enable = true;
 
   # ── User extensions ───────────────────────────────────────────────────────────
   local.primaryUser.extraGroups = lib.mkAfter [ "input" "video" ];
