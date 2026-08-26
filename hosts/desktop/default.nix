@@ -9,6 +9,7 @@
     ../../profiles/programming.nix
     ../../profiles/claude.nix
     ../../profiles/unfree.nix
+    ../../profiles/usb_hub_dev.nix
   ];
 
   networking.hostName = "desktop";
