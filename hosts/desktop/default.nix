@@ -10,6 +10,7 @@
     ../../profiles/claude.nix
     ../../profiles/unfree.nix
     ../../profiles/usb_hub_dev.nix
+    ../../profiles/hs80-max.nix
   ];
 
   networking.hostName = "desktop";

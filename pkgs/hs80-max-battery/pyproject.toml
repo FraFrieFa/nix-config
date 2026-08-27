@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hs80-max-battery"
+version = "0.1.0"
+description = "Passive battery report monitor for the Corsair HS80 MAX receiver"
+requires-python = ">=3.11"
+
+[project.scripts]
+hs80-max-battery = "hs80_max_battery:main"
+hs80-max-tray = "hs80_max_tray:main"
+
+[tool.setuptools]
+py-modules = ["hs80_max_battery", "hs80_max_tray"]
