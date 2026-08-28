@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import threading
 
-from PySide6.QtCore import QObject, QSettings, QThread, Signal
+from PySide6.QtCore import QLockFile, QObject, QSettings, QStandardPaths, QThread, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -158,6 +159,16 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("HS80 MAX")
     app.setQuitOnLastWindowClosed(False)
+
+    # KDE can process the same autostart entry more than once (for example when
+    # restoring a session). Keep one tray process per logged-in user.
+    runtime_dir = QStandardPaths.writableLocation(QStandardPaths.RuntimeLocation)
+    lock_path = f"{runtime_dir or tempfile.gettempdir()}/hs80-max-tray.lock"
+    instance_lock = QLockFile(lock_path)
+    instance_lock.setStaleLockTime(0)
+    if not instance_lock.tryLock(0):
+        return 0
+
     tray = Tray()
     app.aboutToQuit.connect(tray.stop)
     return app.exec()
