@@ -34,7 +34,7 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 | Display | 10.1" IPS DSI panel, native 1280×800 (landscape), used portrait 800×1280 | ✅ | `video=DSI-1:800x1280@60,rotate=90` in kernel params |
 | Backlight | `intel_backlight`, 0–100 range, controlled via `brightnessctl` | ✅ | — |
 | Early boot display | Blank screen for ~20 s until i915 loads | ⚠️ | `video=efifb:off` prevents simpledrm conflict; no clean fix without i915 in initrd (breaks stride) |
-| Auto-rotate | `iio-sensor-proxy` + `monitor-sensor` script exec'd from sway | ⚠️ | Infrastructure in place; **orientation mapping needs physical testing** — adjust the `normal/left-up/right-up/bottom-up` → sway transform mapping in `default.nix` after testing |
+| Auto-rotate | `iio-sensor-proxy` + `monitor-sensor` driving `xrandr` | ⚠️ | Infrastructure in place; **orientation mapping needs physical testing** — adjust the `normal/left-up/right-up/bottom-up` → XRandR mapping in `default.nix` after testing |
 
 ---
 
@@ -67,10 +67,10 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 
 | Component | Details | Status | Notes |
 |-----------|---------|--------|-------|
-| Touchscreen | FocalTech FTSC1000 (I2C HID, 0x2808:0x1015) | ✅ | `tap enabled`, mapped to DSI-1 in sway |
+| Touchscreen | FocalTech FTSC1000 (I2C HID, 0x2808:0x1015) | ✅ | Mapped to DSI-1 with `xinput`; mapping is refreshed after rotation |
 | Detachable keyboard | SIPODEV USB Composite Device SP-1029H (USB HID) | ✅ | Auto-detected as keyboard + touchpad |
 | Power button | Via ACPI (`tiny_power_button`) | ✅ | — |
-| Volume / brightness keys | ACPI video bus | ✅ | Wired to `brightnessctl` / `pactl` in sway config |
+| Volume / brightness keys | ACPI video bus | ✅ | Wired to `brightnessctl` / `pactl` in the i3 config |
 | Accelerometer | Kionix KXCJK-1013 (kxcjk1013, `iio:device0`, I2C KIOX000A) | ✅ | Hardware working; iio-sensor-proxy exposes orientation events |
 
 ---
@@ -83,7 +83,7 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 | AC / charger | AXP288 charger (`axp288_charger`) | ❌ | **Blacklisted** — causes repeated I2C5 timeouts when loaded; AC state not reported to userspace |
 | PMIC | AXP288 (axp20x-i2c, I2C5 / INT33F4) | ⚠️ | Core driver loads; single IRQ-status timeout at boot; IRQ mask sync fails (I2C5 unreliable) — power button via PMIC (`axp20x_pek`) may miss events |
 | upower | Battery monitoring daemon | ✅ | `services.upower.enable = true` |
-| swayidle | Dim (2 min) → lock (5 min) → DPMS off (6 min) | ✅ | Configured in sway config |
+| xidlehook | Dim (2 min) → lock (5 min) → DPMS off after unlock + 1 min | ✅ | Suspend locking is handled by `xss-lock` |
 
 ---
 
@@ -131,15 +131,15 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 
 | Feature | Implementation | Status | Notes |
 |---------|---------------|--------|-------|
-| Compositor | Sway (Wayland tiling WM) | ✅ | Low CPU/RAM overhead; good touch support |
-| Status bar | Waybar with battery, backlight, audio, wifi, clock | ✅ | Catppuccin Mocha theme |
-| Launcher | Fuzzel | ✅ | — |
-| Terminal | Foot (GPU-accelerated) | ✅ | — |
-| Notifications | Mako | ✅ | — |
-| On-screen keyboard | wvkbd (`$mod+o`) | ✅ | `wvkbd-mobintl` layout for tablet use |
-| Screen lock | swaylock (plain `#1e1e2e`) | ✅ | Triggered by swayidle and before-sleep |
+| Window manager | i3 (X11 tiling WM) | ✅ | Low CPU/RAM overhead |
+| Status bar | i3bar + i3status with battery, disk, memory, audio, wifi, clock | ✅ | — |
+| Launcher | Rofi | ✅ | `$mod+d` |
+| Terminal | Alacritty | ✅ | — |
+| Notifications | Dunst | ✅ | — |
+| On-screen keyboard | Onboard (`$mod+o`) | ✅ | Tablet use |
+| Screen lock | i3lock-color (plain `#1e1e2e`) | ✅ | Triggered by xidlehook and xss-lock before sleep |
 | Auto-rotate | iio-sensor-proxy + monitor-sensor script | ⚠️ | Service runs; orientation→transform mapping needs physical testing |
-| Greeter | tuigreet → sway | ✅ | — |
+| Display manager | LightDM → i3 autologin | ✅ | — |
 | Performance tuning | `intel_idle.max_cstate=1`, thermald, zRAM swap | ✅ | — |
 
 ---
@@ -149,7 +149,7 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 1. **Audio probe race** — RT5645 misses I2C probe ~50% of boots. The `rt5645-reprobe.service` attempts a rebind after boot but cannot fix the underlying I2C5 bus timing. Consider a kernel parameter investigation or DSDT override in the future.
 2. **Camera** — No fix possible on mainline kernel. Would require CachyOS/staging atomisp2 driver.
 3. **AXP288 IRQ** — `Failed to sync masks` at boot. Cosmetic in practice (battery polling still works) but means charge-event interrupts don't fire.
-4. **Auto-rotate orientation** — The `normal/bottom-up/left-up/right-up` → sway transform mapping in `default.nix` (`autoRotateScript`) may need swapping after physical testing.
+4. **Auto-rotate orientation** — The `normal/bottom-up/left-up/right-up` → XRandR mapping in `default.nix` (`autoRotateScript`) may need swapping after physical testing.
 5. **Boot blank screen** — 20 s of black before i915. Unavoidable without loading i915 in initrd (which breaks display stride on this panel).
 
 ---

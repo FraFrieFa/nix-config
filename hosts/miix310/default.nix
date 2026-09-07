@@ -3,18 +3,31 @@ let
   repeat = config.local.keyboard.repeat;
 
   autoRotateScript = pkgs.writeShellScript "auto-rotate" ''
-    # Wait for sway to be ready
+    # Wait for X and i3 to be ready.
     sleep 2
+
+    map_touchscreen() {
+      ${pkgs.xorg.xinput}/bin/xinput list --name-only \
+        | ${pkgs.gnugrep}/bin/grep -Ei 'touchscreen|FTSC1000' \
+        | while IFS= read -r device; do
+            ${pkgs.xorg.xinput}/bin/xinput map-to-output "$device" DSI-1 || true
+          done
+    }
+
+    map_touchscreen
     ${pkgs.iio-sensor-proxy}/bin/monitor-sensor 2>&1 \
       | grep --line-buffered "orientation" \
       | sed -u 's/.*orientation: //' \
       | while IFS= read -r orientation; do
           case "$orientation" in
-            normal)    ${pkgs.sway}/bin/swaymsg output DSI-1 transform normal ;;
-            bottom-up) ${pkgs.sway}/bin/swaymsg output DSI-1 transform 180 ;;
-            left-up)   ${pkgs.sway}/bin/swaymsg output DSI-1 transform 270 ;;
-            right-up)  ${pkgs.sway}/bin/swaymsg output DSI-1 transform 90 ;;
+            normal)    rotation=normal ;;
+            bottom-up) rotation=inverted ;;
+            left-up)   rotation=left ;;
+            right-up)  rotation=right ;;
+            *) continue ;;
           esac
+          ${pkgs.xorg.xrandr}/bin/xrandr --output DSI-1 --rotate "$rotation"
+          map_touchscreen
         done
   '';
 in
@@ -222,184 +235,103 @@ in
     };
   };
 
-  # Nerd Fonts symbols so waybar icons (battery, brightness, volume…) render.
+  # Nerd Fonts symbols used by the i3 status bar.
   fonts.packages = [ pkgs.nerd-fonts.symbols-only ];
 
-  # ── Sway ──────────────────────────────────────────────────────────────────────
-  programs.sway = {
+  # ── i3 / X11 ──────────────────────────────────────────────────────────────────────
+  services.xserver = {
     enable = true;
-    wrapperFeatures.gtk = true;
-    extraPackages = with pkgs; [
-      swayidle swaybg
-      waybar foot fuzzel
-      grim slurp wl-clipboard
-      mako brightnessctl pavucontrol
-      wvkbd          # on-screen keyboard
-      wl-mirror      # screen cast helper
-    ];
+    xkb.layout = "de";
+    autoRepeatDelay = repeat.delay;
+    autoRepeatInterval = 1000 / repeat.rate;
+    windowManager.i3.enable = true;
+    displayManager.lightdm.enable = true;
   };
 
-  systemd.services.greetd.serviceConfig.Type = lib.mkForce "simple";
-
-  # Waybar starts after the PipeWire/Pulse socket exists so the volume module
-  # never has to retry-connect internally, which was the cause of the slow appearance.
-  systemd.user.services.waybar = {
-    description = "Waybar status bar";
-    after  = [ "pipewire-pulse.socket" ];
-    wants  = [ "pipewire-pulse.socket" ];
-    serviceConfig = {
-      ExecStart = "${pkgs.waybar}/bin/waybar";
-      Restart    = "on-failure";
-      RestartSec = "2";
+  services.displayManager = {
+    defaultSession = "none+i3";
+    autoLogin = {
+      enable = true;
+      user = config.local.primaryUser.name;
     };
   };
 
-  systemd.user.services.foot-server = {
-    description = "Foot terminal server";
-    serviceConfig = {
-      ExecStart = "${pkgs.foot}/bin/foot --server";
-      Restart    = "on-failure";
-      RestartSec = "1";
-    };
-  };
+  programs.xss-lock.enable = true;
 
-  services.greetd = {
-    enable = true;
-    settings = {
-      terminal.vt = 1;
-      default_session = {
-        command = "${pkgs.dbus}/bin/dbus-run-session ${pkgs.sway}/bin/sway";
-        user = config.local.primaryUser.name;
-      };
-    };
-  };
+  environment.systemPackages = with pkgs; [
+    alacritty brightnessctl dunst i3lock-color i3status maim onboard
+    pavucontrol rofi xclip xidlehook xorg.xinput xorg.xrandr
+  ];
 
-  # ── Waybar ────────────────────────────────────────────────────────────────────
-  environment.etc."xdg/waybar/config".text = builtins.toJSON {
-    layer    = "top";
-    position = "top";
-    height   = 36;
-    modules-left   = [ "sway/workspaces" "sway/mode" ];
-    modules-center = [ "clock" ];
-    modules-right  = [ "battery" "memory" "disk" "backlight" "pulseaudio" "network" ];
 
-    "sway/workspaces" = {
-      disable-scroll = true;
-      all-outputs = true;
-    };
-    "sway/mode"       = { format = "<span style='italic'>{}</span>"; };
-
-    clock = { format = "  {:%Y-%m-%d  %H:%M}"; tooltip = false; };
-
-    battery = {
-      format          = "{icon}  {capacity}%";
-      format-charging = "  {capacity}%";
-      format-icons    = [ "" "" "" "" "" ];
-      states          = { warning = 30; critical = 15; };
-      tooltip         = false;
-    };
-
-    memory = {
-      format = "  {avail:0.1f}G free";
-      interval = 5;
-      tooltip = false;
-    };
-
-    disk = {
-      format = "  {free} free";
-      interval = 30;
-      path = "/";
-      tooltip = false;
-    };
-
-    backlight = {
-      device         = "intel_backlight";
-      format         = "☀  {percent}%";
-      on-scroll-up   = "${pkgs.brightnessctl}/bin/brightnessctl set 5%+";
-      on-scroll-down = "${pkgs.brightnessctl}/bin/brightnessctl set 5%-";
-      tooltip        = false;
-    };
-
-    pulseaudio = {
-      format        = "{icon}  {volume}%";
-      format-muted  = "  muted";
-      format-icons  = { default = [ "" "" "" ]; };
-      on-click      = "${pkgs.pavucontrol}/bin/pavucontrol";
-      tooltip       = false;
-    };
-
-    network = {
-      format-wifi         = "  {essid}";
-      format-disconnected = "  offline";
-      tooltip             = false;
-    };
-  };
-
-  environment.etc."xdg/waybar/style.css".text = ''
-    * {
-      font-family: "Symbols Nerd Font Mono", "Noto Sans", monospace;
-      font-size: 14px;
-      min-height: 0;
+  # ── i3status and i3 config ───────────────────────────────────────────────────────────────
+  environment.etc."i3status.conf".text = ''
+    general {
+      colors = true
+      interval = 5
     }
-    window#waybar {
-      background: rgba(30, 30, 46, 0.92);
-      color: #cdd6f4;
-      border-bottom: 2px solid #313244;
+    order += "wireless _first_"
+    order += "battery all"
+    order += "disk /"
+    order += "memory"
+    order += "volume master"
+    order += "tztime local"
+
+    wireless _first_ {
+      format_up = "W: %essid"
+      format_down = "W: offline"
     }
-    #workspaces button {
-      padding: 0 8px;
-      color: #6c7086;
-      background: transparent;
-      border: none;
+    battery all {
+      format = "%status %percentage"
+      format_down = "No battery"
+      status_chr = "CHR"
+      status_bat = "BAT"
+      status_unk = "UNK"
+      low_threshold = 15
     }
-    #workspaces button.focused, #workspaces button.active {
-      color: #cba6f7;
+    disk "/" {
+      format = "%avail free"
     }
-    #clock, #battery, #memory, #disk, #backlight, #pulseaudio, #network, #mode {
-      padding: 0 12px;
+    memory {
+      format = "%available free"
     }
-    #battery.warning  { color: #fab387; }
-    #battery.critical { color: #f38ba8; }
-    #mode { background: #cba6f7; color: #1e1e2e; }
+    volume master {
+      format = "Vol: %volume"
+      format_muted = "Vol: muted"
+      device = "pulse"
+    }
+    tztime local {
+      format = "%Y-%m-%d %H:%M"
+    }
   '';
 
-  # ── Sway config ───────────────────────────────────────────────────────────────
-  environment.etc."sway/config".text = ''
+  # ── i3 config ───────────────────────────────────────────────────────────────────────────────
+  environment.etc."i3/config".text = ''
     set $mod Mod1
     set $left h
     set $down j
     set $up k
     set $right l
-    set $term footclient
-    set $menu fuzzel --show run --no-icons
+    set $term ${pkgs.alacritty}/bin/alacritty
+    set $menu ${pkgs.rofi}/bin/rofi -show drun
 
-    output DSI-1 bg #1e1e2e solid_color
-
-    input type:keyboard {
-        xkb_layout "de"
-        repeat_delay ${toString repeat.delay}
-        repeat_rate  ${toString repeat.rate}
-    }
-
-    input type:touchscreen {
-        tap enabled
-        map_to_output DSI-1
-    }
+    font pango:Noto Sans 12
+    client.focused #cba6f7 #cba6f7 #1e1e2e #cba6f7 #cba6f7
+    client.unfocused #313244 #313244 #cdd6f4 #313244 #313244
 
     # ── Startup ──────────────────────────────────────────────────────────────────
-    exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP && systemctl --user start waybar foot-server
-    exec mako
-    exec exec ${autoRotateScript}
-    exec swayidle -w \
-        timeout 120 '${pkgs.brightnessctl}/bin/brightnessctl set 20%' \
-        resume  '${pkgs.brightnessctl}/bin/brightnessctl set 100%' \
-        before-sleep '${pkgs.brightnessctl}/bin/brightnessctl set 20%'
+    exec --no-startup-id ${pkgs.xorg.xsetroot}/bin/xsetroot -solid "#1e1e2e"
+    exec --no-startup-id ${pkgs.dunst}/bin/dunst
+    exec --no-startup-id ${pkgs.networkmanagerapplet}/bin/nm-applet
+    exec --no-startup-id ${autoRotateScript}
+    exec --no-startup-id ${pkgs.xss-lock}/bin/xss-lock --transfer-sleep-lock -- ${pkgs.i3lock-color}/bin/i3lock -n -c 1e1e2e
+    exec --no-startup-id ${pkgs.xidlehook}/bin/xidlehook --not-when-fullscreen --timer 120 '${pkgs.brightnessctl}/bin/brightnessctl set 20%' '${pkgs.brightnessctl}/bin/brightnessctl set 100%' --timer 180 '${pkgs.i3lock-color}/bin/i3lock -c 1e1e2e' true --timer 60 '${pkgs.xorg.xset}/bin/xset dpms force off' true
 
     # ── Bindings ─────────────────────────────────────────────────────────────────
     bindsym $mod+Return exec $term
     bindsym $mod+Shift+q kill
     bindsym $mod+d exec $menu
-    bindsym $mod+o exec ${pkgs.wvkbd}/bin/wvkbd-mobintl  # on-screen keyboard
+    bindsym $mod+o exec ${pkgs.onboard}/bin/onboard  # on-screen keyboard
     floating_modifier $mod normal
 
     bindsym $mod+$left  focus left
@@ -464,18 +396,21 @@ in
     }
     bindsym $mod+r mode "resize"
 
-    bindsym --locked XF86AudioMute        exec pactl set-sink-mute @DEFAULT_SINK@ toggle
-    bindsym --locked XF86AudioLowerVolume exec pactl set-sink-volume @DEFAULT_SINK@ -5%
-    bindsym --locked XF86AudioRaiseVolume exec pactl set-sink-volume @DEFAULT_SINK@ +5%
-    bindsym --locked XF86AudioMicMute     exec pactl set-source-mute @DEFAULT_SOURCE@ toggle
-    bindsym --locked XF86MonBrightnessDown exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%-
-    bindsym --locked XF86MonBrightnessUp   exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%+
-    bindsym Print exec ${pkgs.grim}/bin/grim
+    bindsym XF86AudioMute        exec pactl set-sink-mute @DEFAULT_SINK@ toggle
+    bindsym XF86AudioLowerVolume exec pactl set-sink-volume @DEFAULT_SINK@ -5%
+    bindsym XF86AudioRaiseVolume exec pactl set-sink-volume @DEFAULT_SINK@ +5%
+    bindsym XF86AudioMicMute     exec pactl set-source-mute @DEFAULT_SOURCE@ toggle
+    bindsym XF86MonBrightnessDown exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%-
+    bindsym XF86MonBrightnessUp   exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%+
+    bindsym Print exec ${pkgs.maim}/bin/maim -s | ${pkgs.xclip}/bin/xclip -selection clipboard -t image/png
 
-    bindsym $mod+Shift+e exec swaymsg exit
+    bindsym $mod+Shift+e exec i3-msg exit
     bindsym $mod+Shift+r reload
 
-    include /etc/sway/config.d/*
+    bar {
+      position top
+      status_command ${pkgs.i3status}/bin/i3status --config /etc/i3status.conf
+    }
   '';
 
   # ── Networking ────────────────────────────────────────────────────────────────
