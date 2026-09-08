@@ -31,10 +31,10 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 | Component | Details | Status | Notes |
 |-----------|---------|--------|-------|
 | GPU | Intel HD Graphics 400 (Cherryview, device ID 22b0), i915 driver | ✅ | `i915.force_probe=*` required |
-| Display | 10.1" IPS DSI panel, native 1280×800 (landscape), used portrait 800×1280 | ✅ | `video=DSI-1:800x1280@60,rotate=90` in kernel params |
+| Display | 10.1" IPS DSI panel, native 1280×800 (landscape), used portrait 800×1280 | ✅ | Xorg `Monitor` section applies `Option "Rotate" "right"`; rotation is intentionally not done during early boot |
 | Backlight | `intel_backlight`, 0–100 range, controlled via `brightnessctl` | ✅ | — |
 | Early boot display | Blank screen for ~20 s until i915 loads | ⚠️ | `video=efifb:off` prevents simpledrm conflict; no clean fix without i915 in initrd (breaks stride) |
-| Auto-rotate | `iio-sensor-proxy` + `monitor-sensor` driving `xrandr` | ⚠️ | Infrastructure in place; **orientation mapping needs physical testing** — adjust the `normal/left-up/right-up/bottom-up` → XRandR mapping in `default.nix` after testing |
+| Auto-rotate | `iio-sensor-proxy` + `monitor-sensor` driving `xrandr` | ⚠️ | Mapping includes the panel's 90° mounting offset; needs physical testing on the device |
 
 ---
 
@@ -149,7 +149,7 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 1. **Audio probe race** — RT5645 misses I2C probe ~50% of boots. The `rt5645-reprobe.service` attempts a rebind after boot but cannot fix the underlying I2C5 bus timing. Consider a kernel parameter investigation or DSDT override in the future.
 2. **Camera** — No fix possible on mainline kernel. Would require CachyOS/staging atomisp2 driver.
 3. **AXP288 IRQ** — `Failed to sync masks` at boot. Cosmetic in practice (battery polling still works) but means charge-event interrupts don't fire.
-4. **Auto-rotate orientation** — The `normal/bottom-up/left-up/right-up` → XRandR mapping in `default.nix` (`autoRotateScript`) may need swapping after physical testing.
+4. **Auto-rotate orientation** — The 90°-offset `normal/bottom-up/left-up/right-up` → XRandR mapping in `default.nix` (`autoRotateScript`) needs confirmation through physical testing.
 5. **Boot blank screen** — 20 s of black before i915. Unavoidable without loading i915 in initrd (which breaks display stride on this panel).
 
 ---

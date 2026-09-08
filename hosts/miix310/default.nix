@@ -20,10 +20,12 @@ let
       | sed -u 's/.*orientation: //' \
       | while IFS= read -r orientation; do
           case "$orientation" in
-            normal)    rotation=normal ;;
-            bottom-up) rotation=inverted ;;
-            left-up)   rotation=left ;;
-            right-up)  rotation=right ;;
+            # The DSI panel is mounted 90 degrees clockwise relative to the
+            # accelerometer, so every sensor orientation needs that offset.
+            normal)    rotation=right ;;
+            bottom-up) rotation=left ;;
+            left-up)   rotation=normal ;;
+            right-up)  rotation=inverted ;;
             *) continue ;;
           esac
           ${pkgs.xorg.xrandr}/bin/xrandr --output DSI-1 --rotate "$rotation"
@@ -246,6 +248,12 @@ in
     autoRepeatInterval = 1000 / repeat.rate;
     windowManager.i3.enable = true;
     displayManager.lightdm.enable = true;
+    extraConfig = ''
+      Section "Monitor"
+        Identifier "DSI-1"
+        Option "Rotate" "right"
+      EndSection
+    '';
   };
 
   services.displayManager = {
@@ -312,6 +320,7 @@ in
     set $down j
     set $up k
     set $right l
+    # Keep the i3 default terminal independent of the user's PATH.
     set $term ${pkgs.alacritty}/bin/alacritty
     set $menu ${pkgs.rofi}/bin/rofi -show drun
 
