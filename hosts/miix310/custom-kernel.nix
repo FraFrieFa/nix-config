@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ lib, miixKernelPkgs, ... }:
 
 # Hand-crafted kernel config for Lenovo MIIX 310 — Intel Atom x5-Z8350 (Cherry Trail / Airmont)
 # Hardware inventory (fixed):
@@ -22,8 +22,8 @@
 #   TPM     : MSFT0101 (TPM 2.0 CRB)
 
 let
-  baseKernel = pkgs.linuxPackages.kernel;
-  kernelPackages = pkgs.linuxPackages_custom {
+  baseKernel = miixKernelPkgs.linuxPackages.kernel;
+  kernelPackages = miixKernelPkgs.linuxPackages_custom {
     inherit (baseKernel) version src modDirVersion;
     configfile = ./kernel-config-6.18.34;
     allowImportFromDerivation = false;
