@@ -21,6 +21,10 @@ let
       crypttabExtraOpts = [
         "fido2-device=auto"
         "tries=0"
+        # How long to wait for the YubiKey to enumerate before falling back to
+        # the passphrase prompt. systemd's default is 30s, which is a long stare
+        # at a blank prompt when the token simply is not plugged in.
+        "token-timeout=5s"
       ];
     };
     content = rootFilesystem;
