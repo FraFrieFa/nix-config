@@ -22,7 +22,9 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 | Component | Details | Status | Notes |
 |-----------|---------|--------|-------|
 | eMMC | 64 GB Hynix HCG8e (mmcblk0), SDHCI ACPI | ✅ | `sdhci_acpi` forced into initrd for faster detection |
-| Partitioning | p1: 2 GB vfat /boot (shared), p2: 26 GB btrfs (CachyOS), p3: 25 GB ext4 / (NixOS) | ✅ | Dual-boot, shared EFI; `canTouchEfiVariables = false` |
+| Partitioning | p1: 1 GB vfat /boot (ESP), p2: 52.2 GB LUKS → ext4 / | ✅ | NixOS only; the CachyOS dual-boot was removed and the disk repartitioned |
+| EFI variables | Writable | ✅ | `efibootmgr -v` shows Boot0001 "Linux Boot Manager" → `\EFI\systemd\systemd-bootx64.efi`, first in BootOrder, so `canTouchEfiVariables` is left at the `profiles/disk.nix` default of `true` |
+| Generic EFI fallback | `EFI/BOOT/BOOTX64.EFI` | ⚠️ | Must **not** be deleted: BootCurrent was `0000` ("EFI Embedded MMC Device"), i.e. the firmware does boot via the removable-media path, so `removeGenericEfiFallback` stays neutralized |
 
 ---
 
@@ -67,8 +69,8 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 
 | Component | Details | Status | Notes |
 |-----------|---------|--------|-------|
-| Touchscreen | FocalTech FTSC1000 (I2C HID, 0x2808:0x1015) | ✅ | Mapped to DSI-1 with `xinput`; mapping is refreshed after rotation |
-| Detachable keyboard | SIPODEV USB Composite Device SP-1029H (USB HID) | ✅ | Auto-detected as keyboard + touchpad |
+| Touchscreen | FocalTech FTSC1000 (I2C HID, 0x2808:0x1015) | ✅ | Rotated via an explicit `Coordinate Transformation Matrix` (`xinput set-prop`), refreshed on every rotation. `map-to-output` proved unreliable on this DSI panel. Note the device appears **twice** under the same name — a pointer and a spurious `UNKNOWN` keyboard node — so the auto-rotate script matches only the pointer half |
+| Detachable keyboard | SIPODEV USB Composite Device SP-1029H (USB HID) | ✅ | Auto-detected as keyboard + touchpad; touchpad feel tuned via `services.libinput.touchpad` (tap-to-click, natural + two-finger scroll, `ScrollPixelDistance 35`) |
 | Power button | Via ACPI (`tiny_power_button`) | ✅ | — |
 | Volume / brightness keys | ACPI video bus | ✅ | Wired to `brightnessctl` / `pactl` in the i3 config |
 | Accelerometer | Kionix KXCJK-1013 (kxcjk1013, `iio:device0`, I2C KIOX000A) | ✅ | Hardware working; iio-sensor-proxy exposes orientation events |
@@ -80,10 +82,12 @@ Legend: ✅ working · ⚠️ partial/intermittent · ❌ broken · 🚫 not pre
 | Component | Details | Status | Notes |
 |-----------|---------|--------|-------|
 | Battery | AXP288 fuel gauge (`axp288_fuel_gauge`) | ✅ **FIXED** | Was blacklisted; unblocked — reports capacity, voltage, health |
-| AC / charger | AXP288 charger (`axp288_charger`) | ❌ | **Blacklisted** — causes repeated I2C5 timeouts when loaded; AC state not reported to userspace |
+| AC / charger | AXP288 charger (`axp288_charger`) | ❌ | **Blacklisted** — causes repeated I2C5 timeouts when loaded; AC state not reported to userspace. Consequences: the status bar shows percentage only (no charging icon), and low-battery handling is done by the `battery-watch` user timer, which infers charge direction from the sign of `current_now` |
 | PMIC | AXP288 (axp20x-i2c, I2C5 / INT33F4) | ⚠️ | Core driver loads; single IRQ-status timeout at boot; IRQ mask sync fails (I2C5 unreliable) — power button via PMIC (`axp20x_pek`) may miss events |
 | upower | Battery monitoring daemon | ✅ | `services.upower.enable = true` |
 | xidlehook | Dim (2 min) → lock (5 min) → DPMS off after unlock + 1 min | ✅ | Suspend locking is handled by `xss-lock` |
+| Low-battery handling | `battery-watch` systemd user timer, every 2 min | ✅ | Warns at 15%, suspends at 5%; polls the fuel gauge directly because AC state is unavailable |
+| Media keys while locked | — | ❌ | i3 has no `--locked` bindsym equivalent (unlike Sway), and i3lock grabs the keyboard, so volume/brightness keys are inert while the screen is locked. Accepted limitation |
 
 ---
 

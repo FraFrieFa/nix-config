@@ -2,19 +2,62 @@
 let
   repeat = config.local.keyboard.repeat;
 
+  # `alacritty msg create-window` exits 0 and silently does nothing when no
+  # daemon is listening, so its exit status cannot drive a fallback. Probe for
+  # a live daemon process instead, and spawn a standalone window otherwise.
+  terminalScript = pkgs.writeShellScript "terminal" ''
+    if ${pkgs.procps}/bin/pgrep -u "$(${pkgs.coreutils}/bin/id -u)" -f 'alacritty --daemon' >/dev/null 2>&1; then
+      exec ${pkgs.alacritty}/bin/alacritty msg create-window
+    fi
+    exec ${pkgs.alacritty}/bin/alacritty
+  '';
+
+  # Maps the touchscreen onto the panel for a given xrandr rotation.
+  #
+  # `xinput map-to-output` is unreliable on this DSI panel, so the coordinate
+  # transformation matrix is set explicitly instead. Note that the FTSC1000
+  # exposes *two* devices with the same name -- a pointer and a spurious
+  # "UNKNOWN" keyboard node -- so only the pointer half may be touched.
   autoRotateScript = pkgs.writeShellScript "auto-rotate" ''
     # Wait for X and i3 to be ready.
     sleep 2
 
-    map_touchscreen() {
-      ${pkgs.xorg.xinput}/bin/xinput list --name-only \
+    touchscreen_ids() {
+      # --short lists pointers above the keyboard section; stop at the divider.
+      ${pkgs.xinput}/bin/xinput list --short \
+        | ${pkgs.gnused}/bin/sed -n '/Virtual core keyboard/q; p' \
         | ${pkgs.gnugrep}/bin/grep -Ei 'touchscreen|FTSC1000' \
-        | while IFS= read -r device; do
-            ${pkgs.xorg.xinput}/bin/xinput map-to-output "$device" DSI-1 || true
-          done
+        | ${pkgs.gnugrep}/bin/grep -oE 'id=[0-9]+' \
+        | ${pkgs.coreutils}/bin/cut -d= -f2
     }
 
-    map_touchscreen
+    map_touchscreen() {
+      rotation="$1"
+      case "$rotation" in
+        normal)   matrix="1 0 0 0 1 0 0 0 1" ;;
+        right)    matrix="0 1 0 -1 0 1 0 0 1" ;;
+        inverted) matrix="-1 0 1 0 -1 1 0 0 1" ;;
+        left)     matrix="0 -1 1 1 0 0 0 0 1" ;;
+        *) return 0 ;;
+      esac
+      touchscreen_ids | while IFS= read -r id; do
+        [ -n "$id" ] || continue
+        ${pkgs.xinput}/bin/xinput set-prop "$id" \
+          "Coordinate Transformation Matrix" $matrix || true
+      done
+    }
+
+    current_rotation() {
+      ${pkgs.xrandr}/bin/xrandr --query \
+        | ${pkgs.gnugrep}/bin/grep -E '^DSI-1 connected' \
+        | ${pkgs.gnugrep}/bin/grep -oE ' (normal|left|inverted|right) \(' \
+        | ${pkgs.coreutils}/bin/tr -d ' ('
+    }
+
+    # xrandr omits the orientation word entirely when it is "normal".
+    boot_rotation="$(current_rotation)"
+    map_touchscreen "''${boot_rotation:-normal}"
+
     ${pkgs.iio-sensor-proxy}/bin/monitor-sensor 2>&1 \
       | grep --line-buffered "orientation" \
       | sed -u 's/.*orientation: //' \
@@ -28,8 +71,8 @@ let
             right-up)  rotation=inverted ;;
             *) continue ;;
           esac
-          ${pkgs.xorg.xrandr}/bin/xrandr --output DSI-1 --rotate "$rotation"
-          map_touchscreen
+          ${pkgs.xrandr}/bin/xrandr --output DSI-1 --rotate "$rotation"
+          map_touchscreen "$rotation"
         done
   '';
 in
@@ -54,13 +97,18 @@ in
   };
 
   # ── Bootloader ────────────────────────────────────────────────────────────────
-  # systemd-boot + EFI handling come from profiles/disk.nix. Two host overrides:
-  # this INSYDE/Cherry Trail firmware boots ONLY the removable-media fallback
-  # EFI/BOOT/BOOTX64.EFI (confirmed via `bootctl`) and the efivars-brick risk on
-  # this hardware class means we do NOT write EFI variables, and must NOT delete
-  # that fallback binary (disk.nix's removeGenericEfiFallback would brick boot).
+  # systemd-boot + EFI variable handling come from profiles/disk.nix.
+  #
+  # EFI variables ARE writable here: `efibootmgr -v` shows a firmware entry
+  # Boot0001 "Linux Boot Manager" -> \EFI\systemd\systemd-bootx64.efi, first in
+  # BootOrder, so the firmware honours a real NixOS entry and canTouchEfiVariables
+  # is left at the disk.nix default of true.
+  #
+  # The generic fallback must still NOT be deleted: BootCurrent was 0000 ("EFI
+  # Embedded MMC Device", the removable-media path), so the firmware does boot
+  # via EFI/BOOT/BOOTX64.EFI in practice and disk.nix's removeGenericEfiFallback
+  # would break that path.
   boot.loader.systemd-boot.configurationLimit = 5;
-  boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
   boot.loader.timeout = lib.mkForce 1;
   system.activationScripts.removeGenericEfiFallback.text = lib.mkForce "";
 
@@ -171,10 +219,68 @@ in
   hardware.sensor.iio.enable = true;  # iio-sensor-proxy daemon
 
   # ── Power button ──────────────────────────────────────────────────────────────
-  services.logind.settings.Login.HandlePowerKey = "suspend";
+  services.logind.settings.Login = {
+    HandlePowerKey = "suspend";
+    HandleLidSwitch = "suspend";
+    HandleLidSwitchExternalPower = "suspend";
+  };
 
   # ── Battery ───────────────────────────────────────────────────────────────────
   services.upower.enable = true;
+
+  # axp288_charger is blacklisted (I2C5 timeouts), so AC/charging state never
+  # reaches userspace and the usual low-battery handling cannot fire. Poll the
+  # fuel gauge directly instead and infer direction from current_now.
+  systemd.user.services.battery-watch = {
+    description = "Warn and suspend on low battery";
+    serviceConfig.Type = "oneshot";
+    serviceConfig.ExecStart = pkgs.writeShellScript "battery-watch" ''
+      gauge=/sys/class/power_supply/axp288_fuel_gauge
+      [ -r "$gauge/capacity" ] || exit 0
+      capacity=$(${pkgs.coreutils}/bin/cat "$gauge/capacity")
+      current=$(${pkgs.coreutils}/bin/cat "$gauge/current_now" 2>/dev/null || echo 0)
+
+      # A positive current_now means the pack is charging; only act on drain.
+      # Written as an if rather than `&& exit 0` because writeShellScript sets
+      # -e, which would treat the false branch as a script failure.
+      if [ "$current" -gt 0 ]; then
+        exit 0
+      fi
+
+      if [ "$capacity" -le 5 ]; then
+        ${pkgs.libnotify}/bin/notify-send -u critical \
+          "Battery critical" "$capacity% - suspending now"
+        ${pkgs.systemd}/bin/systemctl suspend
+      elif [ "$capacity" -le 15 ]; then
+        ${pkgs.libnotify}/bin/notify-send -u critical \
+          "Battery low" "$capacity% remaining"
+      fi
+    '';
+  };
+
+  # Alacritty ships no NixOS module and no unit of its own, so the daemon is
+  # defined here rather than exec'd from i3 -- systemd restarts it if it dies,
+  # which an i3 `exec` (fired once at login) cannot do.
+  systemd.user.services.alacritty-daemon = {
+    description = "Alacritty terminal daemon";
+    partOf = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" ];
+    wantedBy = [ "graphical-session.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.alacritty}/bin/alacritty --daemon";
+      Restart = "on-failure";
+      RestartSec = 2;
+    };
+  };
+
+  systemd.user.timers.battery-watch = {
+    description = "Periodic low-battery check";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2min";
+      OnUnitActiveSec = "2min";
+    };
+  };
 
   # ── Thermal management ────────────────────────────────────────────────────────
   services.thermald.enable = true;
@@ -238,7 +344,10 @@ in
   };
 
   # Nerd Fonts symbols used by the i3 status bar.
-  fonts.packages = [ pkgs.nerd-fonts.symbols-only ];
+  fonts.packages = [
+    pkgs.nerd-fonts.symbols-only
+    pkgs.nerd-fonts.jetbrains-mono
+  ];
 
   # ── i3 / X11 ──────────────────────────────────────────────────────────────────────
   services.xserver = {
@@ -266,83 +375,144 @@ in
 
   programs.xss-lock.enable = true;
 
+  # Touchpad feel. These are xf86-input-libinput InputClass options; the driver
+  # defaults are noticeably twitchy on a pad this small.
+  services.libinput = {
+    enable = true;
+    touchpad = {
+      tapping = true;
+      tappingDragLock = true;
+      naturalScrolling = true;
+      scrollMethod = "twofinger";
+      clickMethod = "clickfinger";
+      disableWhileTyping = true;
+      middleEmulation = true;
+      accelProfile = "adaptive";
+      accelSpeed = "0.3";
+      # No dedicated NixOS option; the single biggest lever on scroll feel.
+      additionalOptions = ''
+        Option "ScrollPixelDistance" "35"
+      '';
+    };
+  };
+
+  # Without an authentication agent, pkexec and nm-applet's connection editor
+  # fail silently. lxqt-policykit is used over polkit_gnome for closure size.
+  security.polkit.enable = true;
+
   environment.systemPackages = with pkgs; [
-    alacritty brightnessctl dunst i3lock-color i3status maim onboard
-    pavucontrol rofi xclip xidlehook xorg.xinput xorg.xrandr
+    alacritty blueman brightnessctl dmenu dunst i3lock-color i3status-rust
+    j4-dmenu-desktop libnotify lxqt.lxqt-policykit maim onboard pavucontrol
+    rofi xclip xidlehook xinput xrandr
   ];
 
 
-  # ── i3status and i3 config ───────────────────────────────────────────────────────────────
-  environment.etc."i3status.conf".text = ''
-    general {
-      colors = true
-      interval = 5
-    }
-    order += "wireless _first_"
-    order += "battery all"
-    order += "disk /"
-    order += "memory"
-    order += "volume master"
-    order += "tztime local"
+  # ── Status bar (i3status-rust, driving the native i3bar) ────────────────────
+  #
+  # axp288_charger is blacklisted, so there is no AC/mains supply for the bar to
+  # read. The fuel gauge itself does report Charging/Discharging, so $percentage
+  # plus the state icon are both usable; only "time to full/empty" is not.
+  environment.etc."i3status-rust/config.toml".text = ''
+    theme = "ctp-mocha"
+    icons = "material-nf"
 
-    wireless _first_ {
-      format_up = "W: %essid"
-      format_down = "W: offline"
-    }
-    battery all {
-      format = "%status %percentage"
-      format_down = "No battery"
-      status_chr = "CHR"
-      status_bat = "BAT"
-      status_unk = "UNK"
-      low_threshold = 15
-    }
-    disk "/" {
-      format = "%avail free"
-    }
-    memory {
-      format = "%available free"
-    }
-    volume master {
-      format = "Vol: %volume"
-      format_muted = "Vol: muted"
-      device = "pulse"
-    }
-    tztime local {
-      format = "%Y-%m-%d %H:%M"
-    }
+    [[block]]
+    block = "focused_window"
+    format = " $title.str(max_w:35) "
+
+    [[block]]
+    block = "music"
+    format = " $icon $title.str(max_w:20) "
+    [[block.click]]
+    button = "left"
+    action = "music_play_pause"
+
+    [[block]]
+    block = "net"
+    format = " $icon $ssid|$device "
+    missing_format = " $icon down "
+
+    [[block]]
+    block = "sound"
+    format = " $icon $volume "
+    [[block.click]]
+    button = "left"
+    cmd = "${pkgs.pavucontrol}/bin/pavucontrol"
+
+    [[block]]
+    block = "backlight"
+
+    [[block]]
+    block = "battery"
+    device = "axp288_fuel_gauge"
+    format = " $icon $percentage "
+    full_format = " $icon $percentage "
+    missing_format = " $icon x "
+    warning = 25
+    critical = 15
+
+    [[block]]
+    block = "memory"
+    format = " $icon $mem_used_percents "
+
+    [[block]]
+    block = "disk_space"
+    path = "/"
+    format = " $icon $free "
+
+    [[block]]
+    block = "time"
+    format = " $timestamp.datetime(f:'%Y-%m-%d %H:%M') "
+    interval = 30
   '';
 
-  # ── i3 config ───────────────────────────────────────────────────────────────────────────────
+  # ── i3 config ───────────────────────────────────────────────────────────────
+  #
+  # NOTE: i3 prefers ~/.config/i3/config over this file. If that file exists it
+  # silently shadows everything here, so it must stay absent on this host.
   environment.etc."i3/config".text = ''
     set $mod Mod1
     set $left h
     set $down j
     set $up k
     set $right l
-    # Keep the i3 default terminal independent of the user's PATH.
-    set $term ${pkgs.alacritty}/bin/alacritty
-    set $menu ${pkgs.rofi}/bin/rofi -show drun
 
-    font pango:Noto Sans 12
+    # Keep the i3 default terminal independent of the user's PATH. Windows are
+    # created against a long-lived daemon so only the first launch pays the
+    # cold-start cost; fall back to a plain instance if the daemon is gone.
+    set $term ${terminalScript}
+    # dmenu + j4 rather than rofi: a small Xlib binary with no theme engine or
+    # icon loading, which is what actually costs time on cold eMMC. --usage-log
+    # sorts by launch frequency.
+    set $menu ${pkgs.j4-dmenu-desktop}/bin/j4-dmenu-desktop --dmenu='${pkgs.dmenu}/bin/dmenu -i -l 12 -fn "JetBrainsMono Nerd Font-11" -nb "#1e1e2e" -nf "#cdd6f4" -sb "#cba6f7" -sf "#1e1e2e"' --term-mode=alacritty --term=${pkgs.alacritty}/bin/alacritty --usage-log=/home/${config.local.primaryUser.name}/.cache/j4-usage.log
+
+    font pango:JetBrainsMono Nerd Font 11
     client.focused #cba6f7 #cba6f7 #1e1e2e #cba6f7 #cba6f7
     client.unfocused #313244 #313244 #cdd6f4 #313244 #313244
 
-    # ── Startup ──────────────────────────────────────────────────────────────────
-    exec --no-startup-id ${pkgs.xorg.xsetroot}/bin/xsetroot -solid "#1e1e2e"
+    # Alt is left free for applications (Alt+w, Alt+f, ...); dragging floating
+    # windows uses Super instead of grabbing Alt globally.
+    floating_modifier Mod4 normal
+
+    # ── Startup ─────────────────────────────────────────────────────────────────
+    exec --no-startup-id ${pkgs.xsetroot}/bin/xsetroot -solid "#1e1e2e"
+    exec --no-startup-id ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP
     exec --no-startup-id ${pkgs.dunst}/bin/dunst
     exec --no-startup-id ${pkgs.networkmanagerapplet}/bin/nm-applet
+    exec --no-startup-id ${pkgs.blueman}/bin/blueman-applet
+    exec --no-startup-id ${pkgs.lxqt.lxqt-policykit}/bin/lxqt-policykit-agent
     exec --no-startup-id ${autoRotateScript}
     exec --no-startup-id ${pkgs.xss-lock}/bin/xss-lock --transfer-sleep-lock -- ${pkgs.i3lock-color}/bin/i3lock -n -c 1e1e2e
-    exec --no-startup-id ${pkgs.xidlehook}/bin/xidlehook --not-when-fullscreen --timer 120 '${pkgs.brightnessctl}/bin/brightnessctl set 20%' '${pkgs.brightnessctl}/bin/brightnessctl set 100%' --timer 180 '${pkgs.i3lock-color}/bin/i3lock -c 1e1e2e' true --timer 60 '${pkgs.xorg.xset}/bin/xset dpms force off' true
+    exec --no-startup-id ${pkgs.xidlehook}/bin/xidlehook --not-when-fullscreen --timer 120 '${pkgs.brightnessctl}/bin/brightnessctl set 20%' '${pkgs.brightnessctl}/bin/brightnessctl set 100%' --timer 180 '${pkgs.i3lock-color}/bin/i3lock -c 1e1e2e' true --timer 60 '${pkgs.xset}/bin/xset dpms force off' true
 
-    # ── Bindings ─────────────────────────────────────────────────────────────────
+    # ── Launchers ───────────────────────────────────────────────────────────────
     bindsym $mod+Return exec $term
-    bindsym $mod+Shift+q kill
     bindsym $mod+d exec $menu
-    bindsym $mod+o exec ${pkgs.onboard}/bin/onboard  # on-screen keyboard
-    floating_modifier $mod normal
+    bindsym $mod+o exec ${pkgs.onboard}/bin/onboard
+    bindsym $mod+Shift+q kill
 
+    # ── Focus ───────────────────────────────────────────────────────────────────
+    # Arrows and hjkl move directionally; Tab and PgUp/PgDn walk the stack.
     bindsym $mod+$left  focus left
     bindsym $mod+$down  focus down
     bindsym $mod+$up    focus up
@@ -352,6 +522,13 @@ in
     bindsym $mod+Up     focus up
     bindsym $mod+Right  focus right
 
+    bindsym $mod+Tab       focus next
+    bindsym $mod+Shift+Tab focus prev
+    bindsym $mod+Prior     focus next sibling
+    bindsym $mod+Next      focus prev sibling
+    bindsym $mod+a         focus parent
+
+    # ── Move ────────────────────────────────────────────────────────────────────
     bindsym $mod+Shift+$left  move left
     bindsym $mod+Shift+$down  move down
     bindsym $mod+Shift+$up    move up
@@ -361,6 +538,7 @@ in
     bindsym $mod+Shift+Up     move up
     bindsym $mod+Shift+Right  move right
 
+    # ── Workspaces ──────────────────────────────────────────────────────────────
     bindsym $mod+1 workspace number 1
     bindsym $mod+2 workspace number 2
     bindsym $mod+3 workspace number 3
@@ -381,13 +559,19 @@ in
     bindsym $mod+Shift+8 move container to workspace number 8
     bindsym $mod+Shift+9 move container to workspace number 9
 
+    bindsym $mod+Control+Left  workspace prev
+    bindsym $mod+Control+Right workspace next
+
+    # ── Layout ──────────────────────────────────────────────────────────────────
+    # $mod+w is intentionally left unbound so Alt+w reaches applications.
     bindsym $mod+b splith
     bindsym $mod+v splitv
+    bindsym $mod+s layout stacking
+    bindsym $mod+t layout tabbed
     bindsym $mod+e layout toggle split
     bindsym $mod+f fullscreen
     bindsym $mod+Shift+space floating toggle
     bindsym $mod+space focus mode_toggle
-    bindsym $mod+a focus parent
     bindsym $mod+Shift+minus move scratchpad
     bindsym $mod+minus scratchpad show
 
@@ -405,20 +589,32 @@ in
     }
     bindsym $mod+r mode "resize"
 
-    bindsym XF86AudioMute        exec pactl set-sink-mute @DEFAULT_SINK@ toggle
-    bindsym XF86AudioLowerVolume exec pactl set-sink-volume @DEFAULT_SINK@ -5%
-    bindsym XF86AudioRaiseVolume exec pactl set-sink-volume @DEFAULT_SINK@ +5%
-    bindsym XF86AudioMicMute     exec pactl set-source-mute @DEFAULT_SOURCE@ toggle
+    # ── Media / hardware keys ───────────────────────────────────────────────────
+    bindsym XF86AudioMute        exec ${pkgs.pulseaudio}/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle
+    bindsym XF86AudioLowerVolume exec ${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%
+    bindsym XF86AudioRaiseVolume exec ${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%
+    bindsym XF86AudioMicMute     exec ${pkgs.pulseaudio}/bin/pactl set-source-mute @DEFAULT_SOURCE@ toggle
+    bindsym XF86AudioPlay exec ${pkgs.playerctl}/bin/playerctl play-pause
+    bindsym XF86AudioNext exec ${pkgs.playerctl}/bin/playerctl next
+    bindsym XF86AudioPrev exec ${pkgs.playerctl}/bin/playerctl previous
     bindsym XF86MonBrightnessDown exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%-
     bindsym XF86MonBrightnessUp   exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%+
-    bindsym Print exec ${pkgs.maim}/bin/maim -s | ${pkgs.xclip}/bin/xclip -selection clipboard -t image/png
 
+    # ── Screenshots / notifications / session ───────────────────────────────────
+    bindsym Print       exec ${pkgs.maim}/bin/maim -s | ${pkgs.xclip}/bin/xclip -selection clipboard -t image/png
+    bindsym Shift+Print exec ${pkgs.maim}/bin/maim | ${pkgs.xclip}/bin/xclip -selection clipboard -t image/png
+
+    bindsym $mod+n       exec ${pkgs.dunst}/bin/dunstctl close
+    bindsym $mod+Shift+n exec ${pkgs.dunst}/bin/dunstctl history-pop
+
+    bindsym $mod+Shift+x exec ${pkgs.i3lock-color}/bin/i3lock -c 1e1e2e
     bindsym $mod+Shift+e exec i3-msg exit
     bindsym $mod+Shift+r reload
 
     bar {
       position top
-      status_command ${pkgs.i3status}/bin/i3status --config /etc/i3status.conf
+      font pango:JetBrainsMono Nerd Font 11
+      status_command ${pkgs.i3status-rust}/bin/i3status-rs /etc/i3status-rust/config.toml
     }
   '';
 
@@ -427,6 +623,7 @@ in
 
   # ── Bluetooth ─────────────────────────────────────────────────────────────────
   hardware.bluetooth.enable = true;
+  services.blueman.enable = true;
   hardware.bluetooth.powerOnBoot = true;
 
   # ── Locale extras (base.nix covers timezone and defaultLocale) ────────────────
