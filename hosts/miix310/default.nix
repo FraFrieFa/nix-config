@@ -102,7 +102,7 @@ let
 
     # Alt is left free for applications (Alt+w, Alt+f, ...); dragging floating
     # windows uses Super instead of grabbing Alt globally.
-    floating_modifier Mod4 normal
+    floating_modifier Mod4
 
     # ── Startup ─────────────────────────────────────────────────────────────────
     exec --no-startup-id ${pkgs.xsetroot}/bin/xsetroot -solid "#1e1e2e"
@@ -575,7 +575,12 @@ in
   # read. The fuel gauge itself does report Charging/Discharging, so $percentage
   # plus the state icon are both usable; only "time to full/empty" is not.
   environment.etc."i3status-rust/config.toml".text = ''
+    # i3status-rust >= 0.33 requires these as tables; the bare
+    # `theme = "ctp-mocha"` string form fails to deserialize.
+    [theme]
     theme = "ctp-mocha"
+
+    [icons]
     icons = "material-nf"
 
     [[block]]
@@ -584,7 +589,11 @@ in
 
     [[block]]
     block = "music"
-    format = " $icon $title.str(max_w:20) "
+    # The trailing `|$icon` is a fallback: playerctld registers as an MPRIS
+    # player even with no track loaded, and rendering a format whose
+    # placeholders all resolve to nothing fails with "Failed to render full
+    # text". Falling back to the bare icon keeps the block quiet when idle.
+    format = " $icon $title.str(max_w:20) |$icon "
     [[block.click]]
     button = "left"
     action = "music_play_pause"
