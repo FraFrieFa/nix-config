@@ -75,6 +75,159 @@ let
           map_touchscreen "$rotation"
         done
   '';
+  # ── i3 config ───────────────────────────────────────────────────────────────
+  #
+  # Passed to i3 as `-c` via windowManager.i3.configFile, which also installs it
+  # to /etc/i3/config. An explicit `-c` outranks every path in i3's search order,
+  # so a stray ~/.config/i3/config can no longer shadow it.
+  i3Config = pkgs.writeText "i3-config" ''
+    set $mod Mod1
+    set $left h
+    set $down j
+    set $up k
+    set $right l
+
+    # Keep the i3 default terminal independent of the user's PATH. Windows are
+    # created against a long-lived daemon so only the first launch pays the
+    # cold-start cost; fall back to a plain instance if the daemon is gone.
+    set $term ${terminalScript}
+    # dmenu + j4 rather than rofi: a small Xlib binary with no theme engine or
+    # icon loading, which is what actually costs time on cold eMMC. --usage-log
+    # sorts by launch frequency.
+    set $menu ${pkgs.j4-dmenu-desktop}/bin/j4-dmenu-desktop --dmenu='${pkgs.dmenu}/bin/dmenu -i -l 12 -fn "JetBrainsMono Nerd Font-11" -nb "#1e1e2e" -nf "#cdd6f4" -sb "#cba6f7" -sf "#1e1e2e"' --term-mode=alacritty --term=${pkgs.alacritty}/bin/alacritty --usage-log=/home/${config.local.primaryUser.name}/.cache/j4-usage.log
+
+    font pango:JetBrainsMono Nerd Font 11
+    client.focused #cba6f7 #cba6f7 #1e1e2e #cba6f7 #cba6f7
+    client.unfocused #313244 #313244 #cdd6f4 #313244 #313244
+
+    # Alt is left free for applications (Alt+w, Alt+f, ...); dragging floating
+    # windows uses Super instead of grabbing Alt globally.
+    floating_modifier Mod4 normal
+
+    # ── Startup ─────────────────────────────────────────────────────────────────
+    exec --no-startup-id ${pkgs.xsetroot}/bin/xsetroot -solid "#1e1e2e"
+    exec --no-startup-id ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP
+    exec --no-startup-id ${pkgs.dunst}/bin/dunst
+    exec --no-startup-id ${pkgs.networkmanagerapplet}/bin/nm-applet
+    exec --no-startup-id ${pkgs.blueman}/bin/blueman-applet
+    exec --no-startup-id ${pkgs.lxqt.lxqt-policykit}/bin/lxqt-policykit-agent
+    exec --no-startup-id ${autoRotateScript}
+    exec --no-startup-id ${pkgs.xss-lock}/bin/xss-lock --transfer-sleep-lock -- ${pkgs.i3lock-color}/bin/i3lock -n -c 1e1e2e
+    exec --no-startup-id ${pkgs.xidlehook}/bin/xidlehook --not-when-fullscreen --timer 120 '${pkgs.brightnessctl}/bin/brightnessctl set 20%' '${pkgs.brightnessctl}/bin/brightnessctl set 100%' --timer 180 '${pkgs.i3lock-color}/bin/i3lock -c 1e1e2e' true --timer 60 '${pkgs.xset}/bin/xset dpms force off' true
+
+    # ── Launchers ───────────────────────────────────────────────────────────────
+    bindsym $mod+Return exec $term
+    bindsym $mod+d exec $menu
+    bindsym $mod+o exec ${pkgs.onboard}/bin/onboard
+    bindsym $mod+Shift+q kill
+
+    # ── Focus ───────────────────────────────────────────────────────────────────
+    # Arrows and hjkl move directionally; Tab and PgUp/PgDn walk the stack.
+    bindsym $mod+$left  focus left
+    bindsym $mod+$down  focus down
+    bindsym $mod+$up    focus up
+    bindsym $mod+$right focus right
+    bindsym $mod+Left   focus left
+    bindsym $mod+Down   focus down
+    bindsym $mod+Up     focus up
+    bindsym $mod+Right  focus right
+
+    bindsym $mod+Tab       focus next
+    bindsym $mod+Shift+Tab focus prev
+    bindsym $mod+Prior     focus next sibling
+    bindsym $mod+Next      focus prev sibling
+    bindsym $mod+a         focus parent
+
+    # ── Move ────────────────────────────────────────────────────────────────────
+    bindsym $mod+Shift+$left  move left
+    bindsym $mod+Shift+$down  move down
+    bindsym $mod+Shift+$up    move up
+    bindsym $mod+Shift+$right move right
+    bindsym $mod+Shift+Left   move left
+    bindsym $mod+Shift+Down   move down
+    bindsym $mod+Shift+Up     move up
+    bindsym $mod+Shift+Right  move right
+
+    # ── Workspaces ──────────────────────────────────────────────────────────────
+    bindsym $mod+1 workspace number 1
+    bindsym $mod+2 workspace number 2
+    bindsym $mod+3 workspace number 3
+    bindsym $mod+4 workspace number 4
+    bindsym $mod+5 workspace number 5
+    bindsym $mod+6 workspace number 6
+    bindsym $mod+7 workspace number 7
+    bindsym $mod+8 workspace number 8
+    bindsym $mod+9 workspace number 9
+
+    bindsym $mod+Shift+1 move container to workspace number 1
+    bindsym $mod+Shift+2 move container to workspace number 2
+    bindsym $mod+Shift+3 move container to workspace number 3
+    bindsym $mod+Shift+4 move container to workspace number 4
+    bindsym $mod+Shift+5 move container to workspace number 5
+    bindsym $mod+Shift+6 move container to workspace number 6
+    bindsym $mod+Shift+7 move container to workspace number 7
+    bindsym $mod+Shift+8 move container to workspace number 8
+    bindsym $mod+Shift+9 move container to workspace number 9
+
+    bindsym $mod+Control+Left  workspace prev
+    bindsym $mod+Control+Right workspace next
+
+    # ── Layout ──────────────────────────────────────────────────────────────────
+    # $mod+w is intentionally left unbound so Alt+w reaches applications.
+    bindsym $mod+b splith
+    bindsym $mod+v splitv
+    bindsym $mod+s layout stacking
+    bindsym $mod+t layout tabbed
+    bindsym $mod+e layout toggle split
+    bindsym $mod+f fullscreen
+    bindsym $mod+Shift+space floating toggle
+    bindsym $mod+space focus mode_toggle
+    bindsym $mod+Shift+minus move scratchpad
+    bindsym $mod+minus scratchpad show
+
+    mode "resize" {
+        bindsym $left  resize shrink width 10px
+        bindsym $down  resize grow height 10px
+        bindsym $up    resize shrink height 10px
+        bindsym $right resize grow width 10px
+        bindsym Left   resize shrink width 10px
+        bindsym Down   resize grow height 10px
+        bindsym Up     resize shrink height 10px
+        bindsym Right  resize grow width 10px
+        bindsym Return mode "default"
+        bindsym Escape mode "default"
+    }
+    bindsym $mod+r mode "resize"
+
+    # ── Media / hardware keys ───────────────────────────────────────────────────
+    bindsym XF86AudioMute        exec ${pkgs.pulseaudio}/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle
+    bindsym XF86AudioLowerVolume exec ${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%
+    bindsym XF86AudioRaiseVolume exec ${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%
+    bindsym XF86AudioMicMute     exec ${pkgs.pulseaudio}/bin/pactl set-source-mute @DEFAULT_SOURCE@ toggle
+    bindsym XF86AudioPlay exec ${pkgs.playerctl}/bin/playerctl play-pause
+    bindsym XF86AudioNext exec ${pkgs.playerctl}/bin/playerctl next
+    bindsym XF86AudioPrev exec ${pkgs.playerctl}/bin/playerctl previous
+    bindsym XF86MonBrightnessDown exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%-
+    bindsym XF86MonBrightnessUp   exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%+
+
+    # ── Screenshots / notifications / session ───────────────────────────────────
+    bindsym Print       exec ${pkgs.maim}/bin/maim -s | ${pkgs.xclip}/bin/xclip -selection clipboard -t image/png
+    bindsym Shift+Print exec ${pkgs.maim}/bin/maim | ${pkgs.xclip}/bin/xclip -selection clipboard -t image/png
+
+    bindsym $mod+n       exec ${pkgs.dunst}/bin/dunstctl close
+    bindsym $mod+Shift+n exec ${pkgs.dunst}/bin/dunstctl history-pop
+
+    bindsym $mod+Shift+x exec ${pkgs.i3lock-color}/bin/i3lock -c 1e1e2e
+    bindsym $mod+Shift+e exec i3-msg exit
+    bindsym $mod+Shift+r reload
+
+    bar {
+      position top
+      font pango:JetBrainsMono Nerd Font 11
+      status_command ${pkgs.i3status-rust}/bin/i3status-rs /etc/i3status-rust/config.toml
+    }
+  '';
+
 in
 {
   imports = [
@@ -355,7 +508,16 @@ in
     xkb.layout = "de";
     autoRepeatDelay = repeat.delay;
     autoRepeatInterval = 1000 / repeat.rate;
-    windowManager.i3.enable = true;
+    windowManager.i3 = {
+      enable = true;
+      # i3 searches $XDG_CONFIG_HOME/i3/config, ~/.i3/config,
+      # $XDG_CONFIG_DIRS/i3/config, then $out/etc/i3/config -- the LAST of which
+      # is inside the i3 store path, NOT /etc/i3/config. So /etc/i3/config is
+      # never consulted on its own. Setting configFile makes the module both
+      # install the file to /etc/i3/config and launch i3 with `-c /etc/i3/config`,
+      # which is the only thing that actually makes it load.
+      configFile = i3Config;
+    };
     displayManager.lightdm.enable = true;
     extraConfig = ''
       Section "Monitor"
@@ -466,157 +628,6 @@ in
     interval = 30
   '';
 
-  # ── i3 config ───────────────────────────────────────────────────────────────
-  #
-  # NOTE: i3 prefers ~/.config/i3/config over this file. If that file exists it
-  # silently shadows everything here, so it must stay absent on this host.
-  environment.etc."i3/config".text = ''
-    set $mod Mod1
-    set $left h
-    set $down j
-    set $up k
-    set $right l
-
-    # Keep the i3 default terminal independent of the user's PATH. Windows are
-    # created against a long-lived daemon so only the first launch pays the
-    # cold-start cost; fall back to a plain instance if the daemon is gone.
-    set $term ${terminalScript}
-    # dmenu + j4 rather than rofi: a small Xlib binary with no theme engine or
-    # icon loading, which is what actually costs time on cold eMMC. --usage-log
-    # sorts by launch frequency.
-    set $menu ${pkgs.j4-dmenu-desktop}/bin/j4-dmenu-desktop --dmenu='${pkgs.dmenu}/bin/dmenu -i -l 12 -fn "JetBrainsMono Nerd Font-11" -nb "#1e1e2e" -nf "#cdd6f4" -sb "#cba6f7" -sf "#1e1e2e"' --term-mode=alacritty --term=${pkgs.alacritty}/bin/alacritty --usage-log=/home/${config.local.primaryUser.name}/.cache/j4-usage.log
-
-    font pango:JetBrainsMono Nerd Font 11
-    client.focused #cba6f7 #cba6f7 #1e1e2e #cba6f7 #cba6f7
-    client.unfocused #313244 #313244 #cdd6f4 #313244 #313244
-
-    # Alt is left free for applications (Alt+w, Alt+f, ...); dragging floating
-    # windows uses Super instead of grabbing Alt globally.
-    floating_modifier Mod4 normal
-
-    # ── Startup ─────────────────────────────────────────────────────────────────
-    exec --no-startup-id ${pkgs.xsetroot}/bin/xsetroot -solid "#1e1e2e"
-    exec --no-startup-id ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP
-    exec --no-startup-id ${pkgs.dunst}/bin/dunst
-    exec --no-startup-id ${pkgs.networkmanagerapplet}/bin/nm-applet
-    exec --no-startup-id ${pkgs.blueman}/bin/blueman-applet
-    exec --no-startup-id ${pkgs.lxqt.lxqt-policykit}/bin/lxqt-policykit-agent
-    exec --no-startup-id ${autoRotateScript}
-    exec --no-startup-id ${pkgs.xss-lock}/bin/xss-lock --transfer-sleep-lock -- ${pkgs.i3lock-color}/bin/i3lock -n -c 1e1e2e
-    exec --no-startup-id ${pkgs.xidlehook}/bin/xidlehook --not-when-fullscreen --timer 120 '${pkgs.brightnessctl}/bin/brightnessctl set 20%' '${pkgs.brightnessctl}/bin/brightnessctl set 100%' --timer 180 '${pkgs.i3lock-color}/bin/i3lock -c 1e1e2e' true --timer 60 '${pkgs.xset}/bin/xset dpms force off' true
-
-    # ── Launchers ───────────────────────────────────────────────────────────────
-    bindsym $mod+Return exec $term
-    bindsym $mod+d exec $menu
-    bindsym $mod+o exec ${pkgs.onboard}/bin/onboard
-    bindsym $mod+Shift+q kill
-
-    # ── Focus ───────────────────────────────────────────────────────────────────
-    # Arrows and hjkl move directionally; Tab and PgUp/PgDn walk the stack.
-    bindsym $mod+$left  focus left
-    bindsym $mod+$down  focus down
-    bindsym $mod+$up    focus up
-    bindsym $mod+$right focus right
-    bindsym $mod+Left   focus left
-    bindsym $mod+Down   focus down
-    bindsym $mod+Up     focus up
-    bindsym $mod+Right  focus right
-
-    bindsym $mod+Tab       focus next
-    bindsym $mod+Shift+Tab focus prev
-    bindsym $mod+Prior     focus next sibling
-    bindsym $mod+Next      focus prev sibling
-    bindsym $mod+a         focus parent
-
-    # ── Move ────────────────────────────────────────────────────────────────────
-    bindsym $mod+Shift+$left  move left
-    bindsym $mod+Shift+$down  move down
-    bindsym $mod+Shift+$up    move up
-    bindsym $mod+Shift+$right move right
-    bindsym $mod+Shift+Left   move left
-    bindsym $mod+Shift+Down   move down
-    bindsym $mod+Shift+Up     move up
-    bindsym $mod+Shift+Right  move right
-
-    # ── Workspaces ──────────────────────────────────────────────────────────────
-    bindsym $mod+1 workspace number 1
-    bindsym $mod+2 workspace number 2
-    bindsym $mod+3 workspace number 3
-    bindsym $mod+4 workspace number 4
-    bindsym $mod+5 workspace number 5
-    bindsym $mod+6 workspace number 6
-    bindsym $mod+7 workspace number 7
-    bindsym $mod+8 workspace number 8
-    bindsym $mod+9 workspace number 9
-
-    bindsym $mod+Shift+1 move container to workspace number 1
-    bindsym $mod+Shift+2 move container to workspace number 2
-    bindsym $mod+Shift+3 move container to workspace number 3
-    bindsym $mod+Shift+4 move container to workspace number 4
-    bindsym $mod+Shift+5 move container to workspace number 5
-    bindsym $mod+Shift+6 move container to workspace number 6
-    bindsym $mod+Shift+7 move container to workspace number 7
-    bindsym $mod+Shift+8 move container to workspace number 8
-    bindsym $mod+Shift+9 move container to workspace number 9
-
-    bindsym $mod+Control+Left  workspace prev
-    bindsym $mod+Control+Right workspace next
-
-    # ── Layout ──────────────────────────────────────────────────────────────────
-    # $mod+w is intentionally left unbound so Alt+w reaches applications.
-    bindsym $mod+b splith
-    bindsym $mod+v splitv
-    bindsym $mod+s layout stacking
-    bindsym $mod+t layout tabbed
-    bindsym $mod+e layout toggle split
-    bindsym $mod+f fullscreen
-    bindsym $mod+Shift+space floating toggle
-    bindsym $mod+space focus mode_toggle
-    bindsym $mod+Shift+minus move scratchpad
-    bindsym $mod+minus scratchpad show
-
-    mode "resize" {
-        bindsym $left  resize shrink width 10px
-        bindsym $down  resize grow height 10px
-        bindsym $up    resize shrink height 10px
-        bindsym $right resize grow width 10px
-        bindsym Left   resize shrink width 10px
-        bindsym Down   resize grow height 10px
-        bindsym Up     resize shrink height 10px
-        bindsym Right  resize grow width 10px
-        bindsym Return mode "default"
-        bindsym Escape mode "default"
-    }
-    bindsym $mod+r mode "resize"
-
-    # ── Media / hardware keys ───────────────────────────────────────────────────
-    bindsym XF86AudioMute        exec ${pkgs.pulseaudio}/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle
-    bindsym XF86AudioLowerVolume exec ${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%
-    bindsym XF86AudioRaiseVolume exec ${pkgs.pulseaudio}/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%
-    bindsym XF86AudioMicMute     exec ${pkgs.pulseaudio}/bin/pactl set-source-mute @DEFAULT_SOURCE@ toggle
-    bindsym XF86AudioPlay exec ${pkgs.playerctl}/bin/playerctl play-pause
-    bindsym XF86AudioNext exec ${pkgs.playerctl}/bin/playerctl next
-    bindsym XF86AudioPrev exec ${pkgs.playerctl}/bin/playerctl previous
-    bindsym XF86MonBrightnessDown exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%-
-    bindsym XF86MonBrightnessUp   exec ${pkgs.brightnessctl}/bin/brightnessctl set 5%+
-
-    # ── Screenshots / notifications / session ───────────────────────────────────
-    bindsym Print       exec ${pkgs.maim}/bin/maim -s | ${pkgs.xclip}/bin/xclip -selection clipboard -t image/png
-    bindsym Shift+Print exec ${pkgs.maim}/bin/maim | ${pkgs.xclip}/bin/xclip -selection clipboard -t image/png
-
-    bindsym $mod+n       exec ${pkgs.dunst}/bin/dunstctl close
-    bindsym $mod+Shift+n exec ${pkgs.dunst}/bin/dunstctl history-pop
-
-    bindsym $mod+Shift+x exec ${pkgs.i3lock-color}/bin/i3lock -c 1e1e2e
-    bindsym $mod+Shift+e exec i3-msg exit
-    bindsym $mod+Shift+r reload
-
-    bar {
-      position top
-      font pango:JetBrainsMono Nerd Font 11
-      status_command ${pkgs.i3status-rust}/bin/i3status-rs /etc/i3status-rust/config.toml
-    }
-  '';
 
   # ── Networking ────────────────────────────────────────────────────────────────
   networking.hostName = "miix310";
