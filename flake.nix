@@ -16,9 +16,13 @@
       url = "github:NixOS/nixos-hardware";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
+    # Patched KiCad + "Move Aligned To" plugin (Miix only). Deliberately NOT
+    # following our nixpkgs: the flake's patch is pinned against the KiCad
+    # source in its own lock, and a different nixpkgs breaks the patch phase.
+    kicad-move-aligned.url = "github:unguentum/kicad-axis-constrained-move";
   };
 
-  outputs = { nixpkgs, miix-nixpkgs, nixpkgs-unstable, disko, nixos-hardware, ... }:
+  outputs = { nixpkgs, miix-nixpkgs, nixpkgs-unstable, disko, nixos-hardware, kicad-move-aligned, ... }:
   let
     system = "x86_64-linux";
     pkgs-unstable-for = system: import nixpkgs-unstable {
@@ -55,6 +59,7 @@
       specialArgs = {
         inherit pkgs-unstable;
         miixKernelPkgs = miix-kernel-pkgs;
+        kicadMoveAligned = kicad-move-aligned.packages.${system}.patched-kicad;
       };
       modules = [
         disko.nixosModules.disko

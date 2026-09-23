@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, kicadMoveAligned, ... }:
 let
   repeat = config.local.keyboard.repeat;
 
@@ -566,6 +566,11 @@ in
     alacritty blueman brightnessctl dmenu dunst i3lock-color i3status-rust
     j4-dmenu-desktop libnotify lxqt.lxqt-policykit maim onboard pavucontrol
     rofi xclip xidlehook xinput xrandr
+  ] ++ [
+    # Patched KiCad carrying the "Move Aligned To" IPC plugin. Enable
+    # Preferences -> Plugins -> "Enable IPC API" and restart KiCad; the action
+    # then appears under Tools -> External Plugins.
+    #kicadMoveAligned
   ];
 
 
