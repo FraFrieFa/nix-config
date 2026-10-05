@@ -11,10 +11,6 @@
 
   networking.hostName = "vesper";
 
-  # No NAT relay here yet: vesper's uplink is end0/wld0, not the workstation's
-  # enp0s31f6. Set this once it should hand internet to an attached gadget Pi.
-  local.screenpuck.externalInterface = null;
-
   local.disk.full_disk = {
     id = "mmc-SN512_0x7cc51f60";
     bootLayout = "raspberry-pi";

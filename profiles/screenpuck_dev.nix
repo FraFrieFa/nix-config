@@ -1,18 +1,35 @@
 { config, lib, pkgs, ... }:
 let
   cfg = config.local.screenpuck;
+  # usb-<name> per configured port; each Pi gets .2 of its own /24.
+  links = lib.mapAttrsToList (name: p: {
+    iface = "usb-${name}";
+    inherit (p) usbPort;
+    net = "10.42.${toString p.subnet}";
+  }) cfg.ports;
+  ifaces = map (l: l.iface) links;
 in
 {
-  options.local.screenpuck.externalInterface = lib.mkOption {
-    type = lib.types.nullOr lib.types.str;
-    default = null;
-    example = "enp0s31f6";
+  options.local.screenpuck.ports = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        usbPort = lib.mkOption {
+          type = lib.types.str;
+          example = "1-1.3";
+          description = "Kernel USB port path the Pi hangs off (udev KERNELS glob; \"*\" = any).";
+        };
+        subnet = lib.mkOption {
+          type = lib.types.ints.between 0 255;
+          description = "Third octet: this host is 10.42.<subnet>.1, the Pi 10.42.<subnet>.2.";
+        };
+      };
+    });
+    default.screenpuck = { usbPort = "*"; subnet = 0; };
     description = ''
-      Uplink to masquerade the 10.42.0.0/24 USB-gadget subnet out of, so the
-      attached Pi reaches the internet through this host. The interface name is
-      host-specific, hence the option: the gadget link itself (`usb-screenpuck`)
-      is created by a udev rename rule and is the same everywhere, but the
-      uplink is not. Null leaves NAT off entirely.
+      USB gadget links, one per attached Pi, named usb-<name>. The Pi carries
+      no identity of its own (same image, fixed gadget MAC), so the port it is
+      plugged into picks its address: this host's dnsmasq leases exactly
+      10.42.<subnet>.2 on that link, with no router or DNS (no internet relay).
     '';
   };
 
@@ -30,11 +47,44 @@ in
         SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2763", GROUP:="users", MODE:="0664"
         SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2764", GROUP:="users", MODE:="0664"
         SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2711", GROUP:="users", MODE:="0664"
-        # Rename Pi Zero W USB gadget ethernet to a stable name regardless of port
-        SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a1", NAME="usb-screenpuck"
-        SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a2", NAME="usb-screenpuck"
-        # Pi SD card exposed as USB mass storage after rpiboot (msd) — allow flashing without root
+        # Name each Pi Zero W USB gadget link by the port it is plugged into
+        ${lib.concatMapStrings (l: ''
+          SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a[12]", KERNELS=="${l.usbPort}", NAME="${l.iface}"
+        '') links}        # Pi SD card exposed as USB mass storage after rpiboot (msd) — allow flashing without root
         SUBSYSTEM=="block", ATTRS{idVendor}=="0a5c", ATTRS{idProduct}=="0001", GROUP="users", MODE="0660"
+      '';
+
+      # The udev rule above grants raw read/write on the gadget's block device,
+      # but mounting is a separate kernel privilege (CAP_SYS_ADMIN) that device
+      # ownership cannot confer -- so `nix run .#flash` mounts p2 through
+      # udisks2, and udisks2 asks polkit.
+      #
+      # udisks2's filesystem-mount default is <allow_active>yes</allow_active>,
+      # which means active *and seated*. An SSH session is active but attached
+      # to no seat, so flashing over SSH falls through to <allow_any>auth_admin
+      # and fails with NotAuthorizedCanObtain -- while the same command run at
+      # the physical Plasma session succeeds silently. This rule is what makes
+      # a remote flash work unattended.
+      #
+      # Scoped to the gadget's own serial (the Pi enumerates as
+      # "Linux File-Stor Gadget" with serial "rpizero"), so it grants nothing
+      # for any other disk -- narrower than the VID/PID udev match above.
+      # filesystem-mount, not -mount-system: the gadget reports HintSystem=false.
+      #
+      # eject-media is needed as well, not just mounting: the flash flow ends by
+      # ejecting the mass-storage LUN, and that eject is what reboots the Pi back
+      # into boot-ROM USB mode for the second rpiboot phase. It carries the same
+      # seat-based default, so it fails over SSH for the same reason.
+      security.polkit.extraConfig = ''
+        polkit.addRule(function(action, subject) {
+          if ((action.id == "org.freedesktop.udisks2.filesystem-mount" ||
+               action.id == "org.freedesktop.udisks2.filesystem-unmount-others" ||
+               action.id == "org.freedesktop.udisks2.eject-media") &&
+              action.lookup("drive.serial") == "rpizero" &&
+              subject.isInGroup("users")) {
+            return polkit.Result.YES;
+          }
+        });
       '';
 
       # Resolve the device's TLS hostname to its USB gadget IP so
@@ -42,44 +92,40 @@ in
       # own dnsmasq only answers Wi-Fi AP clients, not the point-to-point USB link).
       networking.hosts."10.42.0.2" = [ "local.screenpuck.com" ];
 
-      networking.networkmanager.ensureProfiles.profiles.screenpuck-pi-gadget = {
-        connection = {
-          id = "screenpuck-pi-gadget";
-          type = "ethernet";
-          "interface-name" = "usb-screenpuck";
-          autoconnect = true;
-        };
-        ipv4 = {
-          method = "manual";
-          address1 = "10.42.0.1/24";
-        };
-        ipv6.method = "ignore";
-      };
+      # One manual-address NM profile per link: this host is .1 of the link's /24.
+      networking.networkmanager.ensureProfiles.profiles = lib.listToAttrs (map (l:
+        lib.nameValuePair "screenpuck-${l.iface}" {
+          connection = {
+            id = "screenpuck-${l.iface}";
+            type = "ethernet";
+            "interface-name" = l.iface;
+            autoconnect = true;
+          };
+          ipv4 = {
+            method = "manual";
+            address1 = "${l.net}.1/24";
+          };
+          ipv6.method = "ignore";
+        }) links);
 
-      # The Pi boots its root over NFS from the userspace unfsd server (nix run .#up),
-      # which serves NFS + MOUNT on TCP/UDP 2049 (started with -p, so no portmapper).
-      # Open those ports only on the Pi gadget link so the kernel NFS-root mount can
-      # reach the host; without this the inbound SYN to :2049 is silently dropped.
-      networking.firewall.interfaces."usb-screenpuck" = {
-        allowedTCPPorts = [ 2049 ];
-        allowedUDPPorts = [ 2049 ];
-      };
-
-      # Point-to-point USB gadget link to the Pi: trust it fully so SSH (22),
-      # ICMP and anything else reach the Pi without per-port firewall holes.
-      networking.firewall.trustedInterfaces = [ "usb-screenpuck" ];
-    }
-
-    # Relay internet to the Pi over the USB gadget link: masquerade traffic from
-    # the 10.42.0.0/24 gadget subnet out through the host uplink. Enables IP
-    # forwarding and installs the NAT/forward rules. The Pi reaches this via its
-    # default route through 10.42.0.1 (set Pi-side).
-    (lib.mkIf (cfg.externalInterface != null) {
-      networking.nat = {
+      # DHCP only (port=0: no DNS), one single-address pool per link, and an
+      # empty router/DNS option: the Pi gets an address, never internet.
+      services.dnsmasq = {
         enable = true;
-        internalInterfaces = [ "usb-screenpuck" ];
-        externalInterface = cfg.externalInterface;
+        resolveLocalQueries = false;
+        settings = {
+          port = 0;
+          bind-dynamic = true;
+          interface = ifaces;
+          dhcp-authoritative = true;
+          dhcp-range = map (l: "${l.net}.2,${l.net}.2,255.255.255.0,12h") links;
+          dhcp-option = [ "option:router" "option:dns-server" ];
+        };
       };
-    })
+
+      # Point-to-point USB gadget links to the Pis: trust them fully so DHCP,
+      # ICMP and anything else reach the Pi without per-port firewall holes.
+      networking.firewall.trustedInterfaces = ifaces;
+    }
   ];
 }
