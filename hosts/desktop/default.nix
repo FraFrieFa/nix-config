@@ -13,6 +13,9 @@
     ../../profiles/hs80-max.nix
   ];
 
+  # The one host with a screen to watch the browser on.
+  local.playwright.headless = false;
+
   networking.hostName = "desktop";
 
   local.disk.full_disk = {

@@ -21,8 +21,9 @@
   environment.etc."claude-code/managed-mcp.json".text = lib.generators.toJSON {} {
     mcpServers.playwright = {
       type = "stdio";
-      command = "${pkgs.coreutils}/bin/env";
-      args = [ "-u" "LD_LIBRARY_PATH" "${pkgs.playwright-mcp}/bin/playwright-mcp" "--user-data-dir" "/tmp/playwright-mcp-${config.local.primaryUser.name}" ];
+      command = "${pkgs.playwright-mcp}/bin/playwright-mcp";
+      args = [ "--user-data-dir" "/tmp/playwright-mcp-${config.local.primaryUser.name}" ]
+        ++ lib.optional config.local.playwright.headless "--headless";
     };
   };
 }
