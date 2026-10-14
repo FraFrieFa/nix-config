@@ -35,7 +35,8 @@ in
 
   config = lib.mkMerge [
     {
-      users.users.fabius.extraGroups = lib.mkAfter [ "dialout" ];
+      users.groups.screenpuck-dev = {};
+      users.users.fabius.extraGroups = lib.mkAfter [ "dialout" "screenpuck-dev" ];
 
       users.users.fabius.packages = with pkgs; [
         ffmpeg
@@ -44,14 +45,14 @@ in
 
       services.udev.extraRules = ''
         # Raspberry Pi BCM2708 boot modes, used by rpiboot.
-        SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2763", GROUP:="users", MODE:="0664"
-        SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2764", GROUP:="users", MODE:="0664"
-        SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2711", GROUP:="users", MODE:="0664"
+        SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2763", GROUP:="screenpuck-dev", MODE:="0664"
+        SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2764", GROUP:="screenpuck-dev", MODE:="0664"
+        SUBSYSTEM=="usb", ATTR{idVendor}=="0a5c", ATTR{idProduct}=="2711", GROUP:="screenpuck-dev", MODE:="0664"
         # Name each Pi Zero W USB gadget link by the port it is plugged into
         ${lib.concatMapStrings (l: ''
           SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a[12]", KERNELS=="${l.usbPort}", NAME="${l.iface}"
         '') links}        # Pi SD card exposed as USB mass storage after rpiboot (msd) — allow flashing without root
-        SUBSYSTEM=="block", ATTRS{idVendor}=="0a5c", ATTRS{idProduct}=="0001", GROUP="users", MODE="0660"
+        SUBSYSTEM=="block", ATTRS{idVendor}=="0a5c", ATTRS{idProduct}=="0001", GROUP="screenpuck-dev", MODE="0660"
       '';
 
       # The udev rule above grants raw read/write on the gadget's block device,
@@ -81,7 +82,7 @@ in
                action.id == "org.freedesktop.udisks2.filesystem-unmount-others" ||
                action.id == "org.freedesktop.udisks2.eject-media") &&
               action.lookup("drive.serial") == "rpizero" &&
-              subject.isInGroup("users")) {
+              subject.isInGroup("screenpuck-dev")) {
             return polkit.Result.YES;
           }
         });
