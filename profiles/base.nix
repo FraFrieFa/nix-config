@@ -174,8 +174,15 @@ in
       '';
     };
 
-    security.sudo.wheelNeedsPassword = true;
-    security.sudo.execWheelOnly      = true;
+    security.sudo.enable = false;
+    security.sudo-rs = {
+      enable             = true;
+      wheelNeedsPassword = true;
+      execWheelOnly      = true;
+      extraConfig = ''
+        Defaults timestamp_timeout=0
+      '';
+    };
 
     services.openssh.settings.PermitRootLogin = "no";
 

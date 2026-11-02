@@ -16,6 +16,7 @@ in
     mcp_servers.playwright = {
       command = "${pkgs.playwright-mcp}/bin/playwright-mcp";
       args = [ "--user-data-dir" playwrightUserDataDir ];
+      env_vars = [ "DISPLAY" "XAUTHORITY" "WAYLAND_DISPLAY" ];
     };
   };
 

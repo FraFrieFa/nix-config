@@ -24,7 +24,6 @@ in
 
   boot.kernelParams = [
     "mitigations=auto"
-    "nowatchdog"
     "nmi_watchdog=0"
     "preempt=full"
     "tsc=reliable"
