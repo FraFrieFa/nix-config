@@ -86,6 +86,13 @@
     PowerKeyIgnoreInhibited = true;
   };
 
+  services.udev.extraRules = ''
+    ACTION=="add|bind", SUBSYSTEM=="pci", KERNEL=="0000:00:1f.6", ATTR{power/wakeup}="disabled"
+    ACTION=="add", SUBSYSTEM=="pci", KERNEL=="0000:00:14.0", ATTR{power/wakeup}="disabled"
+    ACTION=="add", SUBSYSTEM=="pci", KERNEL=="0000:04:00.0", ATTR{power/wakeup}="disabled"
+    ACTION=="add", SUBSYSTEM=="net", DRIVERS=="e1000e", RUN+="${pkgs.ethtool}/bin/ethtool -s $name wol d"
+  '';
+
   boot.kernelModules = lib.mkForce [ "atkbd" "ctr" "efi_pstore" "i2c-dev" "loop" "uinput" ];
 
   system.stateVersion = "26.05";

@@ -12,6 +12,6 @@
   };
 
   local.primaryUser.extraPackages = [
-    pkgs.teamspeak6-client
+    (pkgs.callPackage ../pkgs/teamspeak6-wrapped { })
   ];
 }
