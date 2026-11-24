@@ -3,6 +3,7 @@
   imports = [
     ../../profiles/base.nix
     ../../profiles/fabius-default.nix
+    ../../profiles/peter.nix
     ../../profiles/disk.nix
     ../../profiles/desktop.nix
     ../../profiles/gaming.nix
@@ -25,7 +26,16 @@
 
   local.primaryUser.extraPackages = with pkgs; [
     ddcutil
+    keepassxc
   ];
+
+  programs.firefox = {
+    nativeMessagingHosts.packages = [ pkgs.keepassxc ];
+    policies.ExtensionSettings."keepassxc-browser@keepassxc.org" = {
+      install_url = "https://addons.mozilla.org/firefox/downloads/latest/keepassxc-browser/latest.xpi";
+      installation_mode = "normal_installed";
+    };
+  };
 
   i18n.inputMethod = {
     enable = true;
@@ -54,7 +64,7 @@
 
   hardware.sane.enable = true;
   hardware.sane.extraBackends = [ pkgs.hplip ];
-  local.primaryUser.extraGroups = lib.mkAfter [ "scanner" "lp" ];
+  local.primaryUser.extraGroups = lib.mkAfter [ "scanner" "lp" "fastboot" ];
 
   services.xserver.videoDrivers = [ "nvidia" ];
 
@@ -86,7 +96,11 @@
     PowerKeyIgnoreInhibited = true;
   };
 
+  users.groups.fastboot = {};
+
   services.udev.extraRules = ''
+    SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", ATTR{idProduct}=="4ee0", GROUP="fastboot", MODE="0660"
+    SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9008", GROUP="fastboot", MODE="0660"
     ACTION=="add|bind", SUBSYSTEM=="pci", KERNEL=="0000:00:1f.6", ATTR{power/wakeup}="disabled"
     ACTION=="add", SUBSYSTEM=="pci", KERNEL=="0000:00:14.0", ATTR{power/wakeup}="disabled"
     ACTION=="add", SUBSYSTEM=="pci", KERNEL=="0000:04:00.0", ATTR{power/wakeup}="disabled"

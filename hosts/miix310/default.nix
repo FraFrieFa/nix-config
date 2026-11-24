@@ -562,10 +562,11 @@ in
   # fail silently. lxqt-policykit is used over polkit_gnome for closure size.
   security.polkit.enable = true;
 
-  environment.systemPackages = with pkgs; [
+  local.primaryUser.extraPackages = with pkgs; [
     alacritty blueman brightnessctl dmenu dunst i3lock-color i3status-rust
     j4-dmenu-desktop libnotify lxqt.lxqt-policykit maim onboard pavucontrol
     rofi xclip xidlehook xinput xrandr
+    firefox networkmanagerapplet playerctl
   ] ++ [
     # Patched KiCad carrying the "Move Aligned To" IPC plugin. Enable
     # Preferences -> Plugins -> "Enable IPC API" and restart KiCad; the action
@@ -662,11 +663,6 @@ in
 
   # ── User extensions ───────────────────────────────────────────────────────────
   local.primaryUser.extraGroups = lib.mkAfter [ "input" "video" ];
-  local.primaryUser.extraPackages = with pkgs; [
-    firefox
-    networkmanagerapplet
-    playerctl
-  ];
 
   system.stateVersion = "26.05";
 }

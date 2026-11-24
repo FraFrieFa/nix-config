@@ -4,7 +4,7 @@ let
   hs80-max-battery = pkgs.callPackage ../pkgs/hs80-max-battery { };
 in
 {
-  environment.systemPackages = [ hs80-max-battery ];
+  local.primaryUser.extraPackages = [ hs80-max-battery ];
 
   # Limit access to this exact receiver; "uaccess" grants the active local
   # desktop session access without making the HID device world-writable.

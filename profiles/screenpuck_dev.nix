@@ -36,9 +36,9 @@ in
   config = lib.mkMerge [
     {
       users.groups.screenpuck-dev = {};
-      users.users.fabius.extraGroups = lib.mkAfter [ "dialout" "screenpuck-dev" ];
+      local.primaryUser.extraGroups = lib.mkAfter [ "screenpuck-dev" ];
 
-      users.users.fabius.packages = with pkgs; [
+      local.primaryUser.extraPackages = with pkgs; [
         ffmpeg
         cheese
       ];

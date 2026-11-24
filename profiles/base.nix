@@ -9,14 +9,14 @@ in
     ./keyboard.nix
   ];
 
-  # The single human account on this machine. Profiles and hosts extend it
-  # through the extra* list options rather than naming the user directly, so
-  # nothing outside profiles/fabius-default.nix hardcodes a username.
+  # The machine's owner: admin, autologin target, owner of /etc/nixos. Profiles
+  # and hosts extend it through the extra* list options rather than naming the
+  # user directly, so no profile hardcodes a username.
   options.local.primaryUser = {
     name = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Login name of the machine's primary (and only) human user.";
+      description = "Login name of the machine's primary (admin) user.";
     };
 
     description = lib.mkOption {
@@ -35,9 +35,9 @@ in
       type = lib.types.listOf lib.types.package;
       default = [];
       description = ''
-        Packages installed into the primary user's profile. This is the only
-        supported way to install packages; environment.systemPackages is
-        deliberately left unused across this config.
+        Packages installed into the primary user's profile. Packages are always
+        bound to a user (this or local.users.<name>.extraPackages);
+        environment.systemPackages is deliberately left unused across this config.
       '';
     };
 
@@ -46,6 +46,37 @@ in
       default = [];
       description = "SSH public keys accepted for the primary user.";
     };
+  };
+
+  # Additional human accounts. Unprivileged unless `admin` is set; they get
+  # only the packages listed for them.
+  options.local.users = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        description = lib.mkOption {
+          type = lib.types.str;
+          default = "";
+        };
+        admin = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Grant wheel and write access to /etc/nixos (root-equivalent).";
+        };
+        extraGroups = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+        };
+        extraPackages = lib.mkOption {
+          type = lib.types.listOf lib.types.package;
+          default = [];
+        };
+        authorizedKeys = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+        };
+      };
+    });
+    default = {};
   };
 
   options.local.nixosConfig = {
@@ -62,33 +93,47 @@ in
         assertion = primaryUser.name != null;
         message = "local.primaryUser.name must be set by hosts importing profiles/base.nix.";
       }
+      {
+        assertion = !(config.local.users ? ${primaryUser.name});
+        message = "The primary user must not also be listed in local.users.";
+      }
     ];
 
-    users.users.${primaryUser.name} = {
+    users.users = lib.mapAttrs (_: u: {
       isNormalUser = true;
-      inherit (primaryUser) description;
-      extraGroups = [
-        "wheel"
-        "networkmanager"
-        "video"
-        "audio"
-        "nixos-config"
-        "dialout"
-      ] ++ primaryUser.extraGroups;
-      packages = (with pkgs; [
-        curl
-        fd
-        git
-        htop
-        jq
-        pciutils
-        ripgrep
-        unzip
-        usbutils
-        vim
-        wget
-      ]) ++ primaryUser.extraPackages;
-      openssh.authorizedKeys.keys = primaryUser.authorizedKeys;
+      inherit (u) description;
+      extraGroups = [ "networkmanager" "video" "audio" ]
+        ++ lib.optionals u.admin [ "wheel" "nixos-config" ]
+        ++ u.extraGroups;
+      packages = u.extraPackages;
+      openssh.authorizedKeys.keys = u.authorizedKeys;
+    }) config.local.users // {
+      ${primaryUser.name} = {
+        isNormalUser = true;
+        inherit (primaryUser) description;
+        extraGroups = [
+          "wheel"
+          "networkmanager"
+          "video"
+          "audio"
+          "nixos-config"
+          "dialout"
+        ] ++ primaryUser.extraGroups;
+        packages = (with pkgs; [
+          curl
+          fd
+          git
+          htop
+          jq
+          pciutils
+          ripgrep
+          unzip
+          usbutils
+          vim
+          wget
+        ]) ++ primaryUser.extraPackages;
+        openssh.authorizedKeys.keys = primaryUser.authorizedKeys;
+      };
     };
 
     # Members can edit /etc/nixos in place. This is root-equivalent because config
